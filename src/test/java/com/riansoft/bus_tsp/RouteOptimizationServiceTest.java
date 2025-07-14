@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -49,11 +50,10 @@ public class RouteOptimizationServiceTest {
     @Test
     @DisplayName("100개 정류장 데이터로 최적 경로를 계산한다")
     void when100StopsGiven_thenCalculatesOptimalRoutes() {
-        System.out.println("====== [1/4] 테스트 데이터 생성 시작 ======");
+        // 1. 테스트용 데이터 준비
         final DataModel data = createTestDataWithSplitDemand();
-        System.out.println("====== [1/4] 테스트 데이터 생성 완료 ======\n");
 
-        System.out.println("====== [2/4] OR-Tools 모델 및 제약조건 설정 시작 ======");
+        // 2. 라우팅 모델 생성 및 제약조건 설정
         RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.numVehicles, data.depotIndex);
         RoutingModel routing = new RoutingModel(manager);
 
@@ -65,49 +65,35 @@ public class RouteOptimizationServiceTest {
                 (long fromIndex) -> data.virtualStops.get(manager.indexToNode(fromIndex)).demand);
         routing.addDimensionWithVehicleCapacity(
                 demandCallbackIndex, 0, data.vehicleCapacities, true, "Capacity");
-        System.out.println("====== [2/4] OR-Tools 모델 및 제약조건 설정 완료 ======\n");
 
-        System.out.println("====== [3/4] 경로 최적화 계산 시작 (최대 5초) ======");
+        // 3. 문제 해결
         RoutingSearchParameters searchParameters = main.defaultRoutingSearchParameters().toBuilder()
                 .setFirstSolutionStrategy(FirstSolutionStrategy.Value.PATH_CHEAPEST_ARC)
-                .setTimeLimit(Duration.newBuilder().setSeconds(20).build())
+                .setTimeLimit(Duration.newBuilder().setSeconds(5).build())
                 .build();
 
         Assignment solution = routing.solveWithParameters(searchParameters);
-        System.out.println("====== [3/4] 경로 최적화 계산 완료 ======\n");
 
-        System.out.println("====== [4/4] 결과 검증 및 출력 시작 ======");
+        // 4. 결과 검증 및 출력
         assertNotNull(solution, "해답(solution)은 null이 아니어야 합니다. 계산에 실패했습니다.");
         printSolution(data, manager, routing, solution);
-        System.out.println("====== [4/4] 결과 검증 및 출력 완료 ======");
     }
 
-    /**
-     * **[세분화된 로그 추가]** 100개의 정류장 데이터를 동적으로 생성합니다.
-     */
     private DataModel createTestDataWithSplitDemand() {
+        // ... (이전과 동일)
         List<PhysicalStop> physicalStops = new ArrayList<>();
         Random random = new Random();
-
-        // 0번: 차고지 추가
         physicalStops.add(new PhysicalStop("DEPOT_YJ", "양주차고지", 0, 37.7836, 127.0456));
-
-        // 1번 ~ 99번: 랜덤 정류장 99개 추가
         for (int i = 1; i < 100; i++) {
             String stopId = "ST_" + String.format("%03d", i);
             String stopName = "랜덤정류장-" + i;
-            long demand = random.nextInt(66) + 5;
+            long demand = random.nextInt(41) + 5; // 수요량을 5~45로 조정
             double lat = 37.4 + (37.8 - 37.4) * random.nextDouble();
             double lon = 126.8 + (127.2 - 126.8) * random.nextDouble();
             physicalStops.add(new PhysicalStop(stopId, stopName, demand, lat, lon));
         }
-        System.out.println("  > 물리적 정류장(100개) 생성 완료.");
-
-        int vehicleCapacity = 25;
-
-        // 가상 정류장 생성
+        int vehicleCapacity = 45;
         List<VirtualStop> virtualStops = new ArrayList<>();
-        System.out.println("  > 가상 정류장 분할 작업 시작...");
         for (PhysicalStop pStop : physicalStops) {
             if (pStop.demand <= vehicleCapacity) {
                 virtualStops.add(new VirtualStop(pStop.id, pStop.name, pStop.demand, pStop.lat, pStop.lon));
@@ -123,34 +109,20 @@ public class RouteOptimizationServiceTest {
                 }
             }
         }
-        System.out.println("  > 가상 정류장 분할 작업 완료. (총 " + virtualStops.size() + "개의 가상 정류장 생성)");
-
-        // 가상 정류장 기반으로 시간 행렬 생성
         long[][] timeMatrix = createTimeMatrix(virtualStops);
-
         int maxVehicles = 1000;
         long[] vehicleCapacities = new long[maxVehicles];
         for (int i = 0; i < maxVehicles; i++) {
             vehicleCapacities[i] = vehicleCapacity;
         }
-
         return new DataModel(timeMatrix, virtualStops, maxVehicles, vehicleCapacities);
     }
 
-    /**
-     * **[세분화된 로그 추가]** 가상 정류장 목록으로 시간 행렬을 생성합니다.
-     */
     private long[][] createTimeMatrix(List<VirtualStop> stops) {
+        // ... (이전과 동일)
         int numStops = stops.size();
         long[][] matrix = new long[numStops][numStops];
-
-        System.out.println("  > 시간 행렬 생성 시작 (총 " + numStops + "x" + numStops + " = " + (numStops * numStops) + "개의 경로 계산 필요)");
-
         for (int i = 0; i < numStops; i++) {
-            // 10번마다 한 번씩 현재 진행 상황을 출력
-            if (i > 0 && i % 10 == 0) {
-                System.out.printf("    ...진행률: %.1f%% (%d / %d 완료)%n", ((double)i / numStops * 100), i, numStops);
-            }
             for (int j = 0; j < numStops; j++) {
                 if (i == j) continue;
                 if (stops.get(i).originalId.equals(stops.get(j).originalId)) {
@@ -160,13 +132,11 @@ public class RouteOptimizationServiceTest {
                 }
             }
         }
-        System.out.printf("    ...진행률: 100.0%% (%d / %d 완료)%n", numStops, numStops);
-        System.out.println("  > 시간 행렬 생성 완료.");
         return matrix;
     }
 
-    // (시뮬레이션) API 호출
     private long callApiSimulation(VirtualStop origin, VirtualStop destination) {
+        // ... (이전과 동일)
         final double R = 6371.0;
         double lat1 = Math.toRadians(origin.lat), lon1 = Math.toRadians(origin.lon);
         double lat2 = Math.toRadians(destination.lat), lon2 = Math.toRadians(destination.lon);
@@ -176,36 +146,74 @@ public class RouteOptimizationServiceTest {
         return (long) ((R * c / 35.0) * 60 + 5);
     }
 
-    // 결과 출력 메소드
+    /**
+     * **[수정된 부분]** 계산된 최적 경로, 각 버스의 상세 경로 및 시간 통계를 콘솔에 출력합니다.
+     */
     private void printSolution(final DataModel data, final RoutingIndexManager manager,
                                final RoutingModel routing, final Assignment solution) {
-        System.out.println("목표: 총 이동 시간 최소화 -> " + solution.objectiveValue() + "분");
+
+        System.out.println("--- 최종 최적 경로 결과 ---");
+        System.out.println("전체 목표 (총 이동 시간): " + solution.objectiveValue() + "분");
+
         RoutingDimension capacityDimension = routing.getDimensionOrDie("Capacity");
-        int usedVehiclesCount = 0;
+        List<Long> routeTimes = new ArrayList<>(); // 각 버스의 이동 시간을 저장할 리스트
+
         for (int i = 0; i < data.numVehicles; ++i) {
             long index = routing.start(i);
-            if (routing.isEnd(solution.value(routing.nextVar(index)))) continue;
-            usedVehiclesCount++;
-            System.out.printf("%n버스 #%d의 운행 경로:%n", usedVehiclesCount);
-            String route = "";
+            // 실제로 운행하는 버스만 계산
+            if (routing.isEnd(solution.value(routing.nextVar(index)))) {
+                continue;
+            }
+
+            System.out.printf("%n===== 버스 #%d의 운행 계획 =====%n", routeTimes.size() + 1);
+
+            String routePath = "";
+            long routeTime = 0;
+            long previousIndex = index;
+
             while (!routing.isEnd(index)) {
                 int nodeIndex = manager.indexToNode(index);
                 VirtualStop currentStop = data.virtualStops.get(nodeIndex);
                 long routeLoad = solution.value(capacityDimension.cumulVar(index));
+
                 if (nodeIndex == data.depotIndex) {
-                    route += String.format("  %s(출발)", currentStop.name);
+                    routePath += String.format("  %s(출발)", currentStop.name);
                 } else {
-                    route += String.format(" → %s (ID: %s / 누적 %d명)", currentStop.name, currentStop.originalId, routeLoad);
+                    routePath += String.format(" → %s (ID: %s / 누적 %d명)", currentStop.name, currentStop.originalId, routeLoad);
                 }
+
+                // 현재 구간의 이동 시간을 누적
+                previousIndex = index;
                 index = solution.value(routing.nextVar(index));
+                routeTime += routing.getArcCostForVehicle(previousIndex, index, i);
             }
+
             VirtualStop depotStop = data.virtualStops.get(manager.indexToNode(index));
-            route += String.format(" → %s(복귀)", depotStop.name);
+            routePath += String.format(" → %s(복귀)", depotStop.name);
+
             long finalLoad = solution.value(capacityDimension.cumulVar(routing.end(i)));
-            route += String.format("%n  → 최종 탑승 인원: %d명 (버스 정원: %d명)", finalLoad, data.vehicleCapacities[i]);
-            System.out.println(route);
+            routePath += String.format("%n  → 최종 탑승 인원: %d명 (버스 정원: %d명)", finalLoad, data.vehicleCapacities[i]);
+            routePath += String.format("%n  → 이 버스의 총 이동 시간: %d분", routeTime);
+
+            System.out.println(routePath);
+            routeTimes.add(routeTime); // 계산된 시간을 리스트에 추가
         }
-        System.out.println("\n=====================================================");
-        System.out.println("결론: 최적 버스 수는 " + usedVehiclesCount + "대 입니다.");
+
+        // --- 최종 통계 출력 ---
+        System.out.println("\n\n==================== 최종 운행 통계 ====================");
+        if (routeTimes.isEmpty()) {
+            System.out.println("운행에 필요한 버스가 없습니다.");
+        } else {
+            // 스트림을 사용하여 평균, 최대, 최소값 계산
+            double averageTime = routeTimes.stream().mapToLong(val -> val).average().orElse(0.0);
+            long maxTime = Collections.max(routeTimes);
+            long minTime = Collections.min(routeTimes);
+
+            System.out.println("총 운행 버스 수: " + routeTimes.size() + "대");
+            System.out.printf("평균 버스 이동 시간: %.2f분%n", averageTime);
+            System.out.println("최대 버스 이동 시간: " + maxTime + "분");
+            System.out.println("최소 버스 이동 시간: " + minTime + "분");
+        }
+        System.out.println("======================================================");
     }
 }
