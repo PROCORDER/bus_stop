@@ -8,7 +8,7 @@ import com.riansoft.bus_tsp.dto.BusRouteDto;
 import com.riansoft.bus_tsp.dto.RouteSolutionDto;
 import com.riansoft.bus_tsp.dto.StopDto;
 import com.riansoft.bus_tsp.model.VirtualStop;
-import com.riansoft.bus_tsp.service.RouteOptimizationService.DataModel;
+import com.riansoft.bus_tsp.model.DataModel;
 import org.springframework.stereotype.Service;
 
 import java.awt.Color;

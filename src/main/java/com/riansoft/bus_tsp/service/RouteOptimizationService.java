@@ -1,9 +1,9 @@
 package com.riansoft.bus_tsp.service;
 
+import com.riansoft.bus_tsp.model.DataModel;
 import com.google.ortools.Loader;
 import com.google.ortools.constraintsolver.Assignment;
 import com.google.ortools.constraintsolver.FirstSolutionStrategy;
-import com.google.ortools.constraintsolver.RoutingDimension;
 import com.google.ortools.constraintsolver.RoutingIndexManager;
 import com.google.ortools.constraintsolver.RoutingModel;
 import com.google.ortools.constraintsolver.RoutingSearchParameters;
@@ -72,8 +72,10 @@ public class RouteOptimizationService {
                 (long fromIndex, long toIndex) -> {
                     int fromNode = manager.indexToNode(fromIndex);
                     int toNode = manager.indexToNode(toIndex);
+                    // 출발지에서 첫 경유지 가는 비용은 0으로 계산
                     if (fromNode == data.depotIndex) return 0;
                     long travelTime = data.timeMatrix[fromNode][toNode];
+                    //경유지 시간이 일정 시간을 넘겼을 때는 벌점을 부과하여 경유지 시간이 20분 이내
                     if (toNode != data.depotIndex && travelTime > STOP_TO_STOP_TIME_LIMIT) {
                         return PENALTY_FOR_EXCEEDING_TIME;
                     }
@@ -128,9 +130,7 @@ public class RouteOptimizationService {
         }
     }
 
-    /**
-     * [새로 추가된 부분] 최적화 시작 전, 각 정류장이 규칙을 만족하는지 미리 검사하고 로그를 출력합니다.
-     */
+
     private void preCheckStops(DataModel data) {
         System.out.println("\n--- [사전 검사] 각 정류장의 최소 서비스 시간 확인 (제한: " + MAX_SERVICE_TIME + "분) ---");
         boolean hasImpossibleStop = false;
@@ -158,10 +158,7 @@ public class RouteOptimizationService {
         System.out.println("----------------------------------------------------------------------\n");
     }
 
-    public static class DataModel {
-        public final long[][] timeMatrix; public final List<VirtualStop> virtualStops; public final int numVehicles; public final long[] vehicleCapacities; public final int depotIndex = 0;
-        public DataModel(long[][] timeMatrix, List<VirtualStop> virtualStops, int numVehicles, long[] vehicleCapacities) { this.timeMatrix = timeMatrix; this.virtualStops = virtualStops; this.numVehicles = numVehicles; this.vehicleCapacities = vehicleCapacities; }
-    }
+
 
     private DataModel createDataModel(long[][] timeMatrix, List<VirtualStop> virtualStops) {
         long[] vehicleCapacities = new long[MAX_VEHICLES];
