@@ -5,22 +5,32 @@ import com.google.ortools.constraintsolver.RoutingDimension;
 import com.google.ortools.constraintsolver.RoutingIndexManager;
 import com.google.ortools.constraintsolver.RoutingModel;
 import com.riansoft.bus_tsp.dto.BusRouteDto;
+import com.riansoft.bus_tsp.dto.LatLngDto;
 import com.riansoft.bus_tsp.dto.RouteSolutionDto;
 import com.riansoft.bus_tsp.dto.StopDto;
-import com.riansoft.bus_tsp.model.VirtualStop;
 import com.riansoft.bus_tsp.model.DataModel;
+import com.riansoft.bus_tsp.model.VirtualStop;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 @Service
 public class SolutionFormatterService {
 
+    private final KakaoApiService kakaoApiService;
+
+    @Autowired
+    public SolutionFormatterService(KakaoApiService kakaoApiService) {
+        this.kakaoApiService = kakaoApiService;
+    }
+
     /**
      * OR-Tools의 계산 결과를 바탕으로, 각 정류장별 도착 시간을 역산하고,
-     * 각 버스의 순수 서비스 시간(첫 경유지~도착지)을 계산하여 DTO로 변환합니다.
+     * 상세 경로를 조회하여 최종 DTO로 변환합니다.
      */
     public RouteSolutionDto formatSolutionToDto(DataModel data, RoutingIndexManager manager, RoutingModel routing, Assignment solution) {
         List<BusRouteDto> busRoutes = new ArrayList<>();
@@ -31,7 +41,6 @@ public class SolutionFormatterService {
 
         RoutingDimension capacityDimension = routing.getDimensionOrDie("Capacity");
 
-        // 사용될 버스의 수만큼 동적으로 색상 목록을 생성합니다.
         int totalUsedVehicles = 0;
         for (int i = 0; i < data.numVehicles; ++i) {
             if (!routing.isEnd(solution.value(routing.nextVar(routing.start(i))))) {
@@ -49,7 +58,6 @@ public class SolutionFormatterService {
             usedVehiclesCount++;
             List<StopDto> routePathForDto = new ArrayList<>();
 
-
             // 1. 먼저 '총 운행 시간' (차고지 출발 ~ 복귀)을 계산합니다.
             long totalRouteTime = 0;
             long tempIndex = routing.start(i);
@@ -60,28 +68,13 @@ public class SolutionFormatterService {
                 totalRouteTime += routing.getArcCostForVehicle(previousIndex, tempIndex, i);
             }
 
-            // 2. '차고지 -> 첫 경유지'까지의 이동 시간을 별도로 계산합니다.
-            long timeFromDepotToFirstStop = 0;
-            long startIndex = routing.start(i);
-            // 만약 이 버스가 경유지를 하나 이상 방문한다면,
-            if (!routing.isEnd(solution.value(routing.nextVar(startIndex)))) {
-                // 첫 번째 경유지의 인덱스를 가져옵니다.
-                long firstStopNodeIndex = solution.value(routing.nextVar(startIndex));
-                // 차고지에서 첫 경유지까지의 이동 시간을 구합니다.
-                timeFromDepotToFirstStop = routing.getArcCostForVehicle(startIndex, firstStopNodeIndex, i);
-            }
-
-            // 3. '총 운행 시간'에서 '차고지 -> 첫 경유지' 시간을 빼서, 최종 '서비스 시간'을 계산합니다.
-            long serviceTime = totalRouteTime - timeFromDepotToFirstStop;
-
-            // -----------------------------------------------------------
-
-            // 도착 시간 역산을 위한 출발 시간 계산 (전체 운행 시간 기준)
+            // 2. 이 버스가 차고지에서 출발해야 할 시각을 역산합니다.
             long departureTime = finalArrivalTimeTarget - totalRouteTime;
 
-            // 다시 경로를 순회하며, 각 정류장의 도착 시각을 계산합니다.
+            // 3. 다시 경로를 순회하며, 각 정류장의 도착 시각을 계산하고 상세 경로를 조회합니다.
             index = routing.start(i);
             long accumulatedTime = departureTime;
+            List<List<LatLngDto>> detailedPathSegments = new ArrayList<>();
 
             while (!routing.isEnd(index)) {
                 int nodeIndex = manager.indexToNode(index);
@@ -96,6 +89,13 @@ public class SolutionFormatterService {
                 previousIndex = index;
                 index = solution.value(routing.nextVar(index));
                 accumulatedTime += routing.getArcCostForVehicle(previousIndex, index, i);
+
+                // 현재 구간의 상세 경로 조회
+                if (!routing.isEnd(index)) {
+                    int nextNodeIndex = manager.indexToNode(index);
+                    VirtualStop nextVStop = data.virtualStops.get(nextNodeIndex);
+                    detailedPathSegments.add(kakaoApiService.getDetailedPath(vStop, nextVStop));
+                }
             }
 
             VirtualStop lastStop = data.virtualStops.get(manager.indexToNode(index));
@@ -105,24 +105,29 @@ public class SolutionFormatterService {
 
             long finalLoad = solution.value(capacityDimension.cumulVar(routing.end(i)));
             String routeColor = colors.get(usedVehiclesCount - 1);
-
-            // DTO에는 총 운행 시간이 아닌, 계산된 '서비스 시간'을 담습니다.
-            busRoutes.add(new BusRouteDto(usedVehiclesCount, routePathForDto, serviceTime, finalLoad, routeColor));
+            busRoutes.add(new BusRouteDto(usedVehiclesCount, routePathForDto, totalRouteTime, finalLoad, routeColor, detailedPathSegments));
         }
 
         return new RouteSolutionDto(solution.objectiveValue(), usedVehiclesCount, busRoutes);
     }
 
-
     private List<String> generateDistinctColors(int count) {
         List<String> colors = new ArrayList<>();
         if (count <= 0) return colors;
+
+        Random random = new Random(0);
+        float currentHue = random.nextFloat();
+        final float GOLDEN_RATIO_CONJUGATE = 0.61803398875f;
+
         for (int i = 0; i < count; i++) {
-            float hue = (float) i / count;
-            Color color = Color.getHSBColor(hue, 0.9f, 0.8f);
+            float saturation = 0.85f;
+            float brightness = 0.9f;
+            Color color = Color.getHSBColor(currentHue, saturation, brightness);
             String hexColor = String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
             colors.add(hexColor);
+            currentHue = (currentHue + GOLDEN_RATIO_CONJUGATE) % 1.0f;
         }
         return colors;
     }
 }
+
