@@ -52,7 +52,7 @@ src/main/resources/static/index.html 파일을 엽니다.
 HTML
 
 <script type. .. src="//dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_JAVASCRIPT_API_KEY"></script>
-참고: 카카오 개발자 사이트의 **[플랫폼 설정]**에서 웹 플랫폼으로 **http://localhost:8080**을 반드시 등록해야 합니다.
+#### 참고: 카카오 개발자 사이트의 [플랫폼 설정]에서 웹 플랫폼으로 http://localhost:8080을 반드시 등록해야 합니다.
 
 ### 2단계: 애플리케이션 실행
 IDE에서 BusTspApplication.java 파일을 찾아 실행합니다.
