@@ -76,14 +76,13 @@ gradlew bootRun
 ## 5. 주요 파라미터 설정
 알고리즘의 동작을 제어하는 주요 상수들은 RouteOptimizationService.java 파일 상단에 정의되어 있어 쉽게 수정하고 테스트할 수 있습니다.
 
-
-버스 한 대의 최대 탑승 가능 인원 
+#### 버스 한 대의 최대 탑승 가능 인원 
 private static final int VEHICLE_CAPACITY = 45;
- 알고리즘이 사용할 수 있는 최대 가용 버스 대수   
+#### 알고리즘이 사용할 수 있는 최대 가용 버스 대수   
 private static final int MAX_VEHICLES = 1005;  
- 경유지 사이의 이동 시간 제한 (페널티 기준)   
+####  경유지 사이의 이동 시간 제한 (페널티 기준)   
 private static final long STOP_TO_STOP_TIME_LIMIT = 20;  
- 첫 경유지부터 마지막 경유지까지의 최대 허용 운행 시간   
+####  첫 경유지부터 마지막 경유지까지의 최대 허용 운행 시간   
 private static final long MAX_SERVICE_TIME = 120;  
-최적 해 탐색 최대 시간   
+#### 최적 해 탐색 최대 시간   
 private static final long SEARCH_TIME_LIMIT_SECONDS = 5;  
