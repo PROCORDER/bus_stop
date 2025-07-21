@@ -95,4 +95,4 @@ private static final long SEARCH_TIME_LIMIT_SECONDS = 5;
 1. 차량마다 다른 용량으로 설정 가능함  
 2. 사용자의 입력에 따라 경로를 재 생성 가능함
 3. 데이터 베이스 적용
-4. 
+4. 프론트에서 입력에대한 정보를 줄 수 있도록 변경
