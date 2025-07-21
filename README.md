@@ -27,10 +27,10 @@ API 호출 캐싱: 한 번 계산된 이동 시간은 **JSON 파일에 저장(�
 
 ## 3. 주요 기술 스택 (Tech Stack)
 분류	라이브러리 / 프레임워크	주요 역할
-백엔드 프레임워크	Spring Boot	웹 서버 구축, REST API 개발, 의존성 주입(DI) 등 전체 애플리케이션의 뼈대
-최적화 엔진	Google OR-Tools	**차량 경로 문제(VRP)**를 해결하는 핵심 엔진. 최적 경로 및 필요 버스 대수 계산
-외부 API (서버)	Kakao Mobility API	RestTemplate을 통해 호출. 정류장 간 실제 이동 시간 계산 및 시간 행렬 생성
-외부 API (클라이언트)	Kakao Maps JavaScript API	index.html에서 사용. 경로 데이터를 지도 위에 동적으로 시각화
+백엔드 프레임워크	Spring Boot	웹 서버 구축 
+최적화 엔진	Google OR-Tools	
+Kakao Mobility API	
+외부 API (클라이언트)	Kakao Maps JavaScript API
 테스트 프레임워크	JUnit 5	자바 코드의 각 기능(단위)이 올바르게 작동하는지 검증
 JSON 처리	Jackson	자바 객체(DTO)와 JSON 문자열 간의 자동 변환 처리
 
@@ -89,3 +89,10 @@ private static final long SEARCH_TIME_LIMIT_SECONDS = 5;
 
 # 시연 이미지
 ![img.png](img.png)
+
+## 개선 가능한 사항
+
+1. 차량마다 다른 용량으로 설정 가능함  
+2. 사용자의 입력에 따라 경로를 재 생성 가능함
+3. 데이터 베이스 적용
+4. 
