@@ -34,12 +34,11 @@ Kakao Mobility API
 테스트 프레임워크	JUnit 5	자바 코드의 각 기능(단위)이 올바르게 작동하는지 검증
 JSON 처리	Jackson	자바 객체(DTO)와 JSON 문자열 간의 자동 변환 처리
 
-Export to Sheets
 
 
 
 
-## 4. 실행 방법 (Setup and Execution)
+## 4. 실행 방법 (API는 본인걸로 돼 있기때문에 따로 설정 할 필요 없음)
 ### 1단계: API 키 설정
 src/main/resources/application.properties 파일을 엽니다.
 
@@ -54,22 +53,8 @@ HTML
 <script type. .. src="//dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_JAVASCRIPT_API_KEY"></script>
 #### 참고: 카카오 개발자 사이트의 [플랫폼 설정]에서 웹 플랫폼으로 http://localhost:8080을 반드시 등록해야 합니다.
 
-### 2단계: 애플리케이션 실행
-IDE에서 BusTspApplication.java 파일을 찾아 실행합니다.
+IDE에서 BusTspApplication.java 파일을 찾아 실행
 
-또는, 프로젝트 루트 폴더의 터미널에서 아래 명령어를 실행합니다.
-
-Bash
-
-# Windows
-gradlew bootRun
-
-# macOS / Linux
-./gradlew bootRun
-3단계: 결과 확인
-웹 브라우저를 열고 http://localhost:8080 주소로 접속합니다.
-
-"경로 계산 중..." 메시지가 잠시 표시된 후, 최적화가 완료되면 동적 지도와 상세 정보가 화면에 나타납니다.
 
 
 
