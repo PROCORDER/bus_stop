@@ -15,6 +15,22 @@
         .stop-list { list-style-type: none; padding-left: 20px; font-size: 0.9em; }
         .stop-list li { padding: 4px 0; display: flex; justify-content: space-between; align-items: center; }
         .stop-list .time { font-weight: bold; color: #333; background-color: #f0f0f0; padding: 2px 5px; border-radius: 4px;}
+
+        /* 커스텀 마커 스타일 */
+        .custom-marker {
+            background-color: #007BFF; /* 배경색 */
+            color: white;             /* 글자색 */
+            font-weight: bold;
+            font-size: 14px;
+            width: 28px;
+            height: 28px;
+            line-height: 28px;        /* 글자를 세로 중앙에 위치 */
+            text-align: center;         /* 글자를 가로 중앙에 위치 */
+            border-radius: 50%;       /* 원 모양으로 만듦 */
+            border: 2px solid white;  /* 흰색 테두리 */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4); /* 그림자 효과 */
+            cursor: pointer;          /* 마우스 커서를 포인터로 변경 */
+        }
     </style>
 </head>
 <body>
@@ -27,7 +43,7 @@
     </div>
 </div>
 
-<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=36f72665851b8b0c6f1061f9c532a308"></script>
+<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=36f72665851b8b0c6f1061f9c532a308&libraries=services,clusterer,drawing"></script>
 
 <script>
     const mapContainer = document.getElementById('map');
@@ -79,15 +95,16 @@
         busRoutes.forEach(busRoute => {
             const routeColor = busRoute.color;
             const fullRoute = busRoute.route;
-            if (fullRoute.length < 2) return;
+            if (fullRoute.length === 0) return;
 
             const routeDiv = document.createElement('div');
             routeDiv.className = 'route-info';
             const header = document.createElement('div');
             header.className = 'route-header';
-            const departureTime = fullRoute.length > 0 ? fullRoute.find(stop => stop.id.startsWith("DEPOT"))?.arrivalTime : 0;
+
+            const departureTime = fullRoute[0].arrivalTime - (busRoute.routeTime - (fullRoute[fullRoute.length - 1].arrivalTime - fullRoute[0].arrivalTime));
             header.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)
-                                ${departureTime !== undefined ? `<div class="departure-time">예상 출발(차고지): ${formatMinutesToTime(departureTime)}</div>` : ''}`;
+                                <div class="departure-time">예상 출발(차고지): ${formatMinutesToTime(departureTime)}</div>`;
             routeDiv.appendChild(header);
 
             const stopUl = document.createElement('ul');
@@ -98,10 +115,10 @@
                 bounds.extend(latlng);
 
                 const isDepot = stop.id.startsWith("DEPOT");
-                const isLastStop = index === fullRoute.length - 1 && !isDepot;
-                const isIntermediateStop = index > 0 && index < fullRoute.length - 1 && !isDepot;
+                const isFirstStop = index === 0 && !isDepot;
+                const isFinalDepot = index === fullRoute.length - 1 && isDepot;
+                const isIntermediateStop = !isFirstStop && !isFinalDepot && !isDepot;
 
-                // 경유지에 원 표시
                 if (isIntermediateStop) {
                     const circle = new kakao.maps.Circle({
                         center: latlng,
@@ -113,36 +130,68 @@
                     circle.setMap(map);
                 }
 
-                // 마커 생성 (출발지는 기본, 도착지는 특별한 마커)
-                let markerImage = null;
-                if (isLastStop) {
-                    markerImage = new kakao.maps.MarkerImage('[https://maps.google.com/mapfiles/kml/paddle/grn-blank.png](https://maps.google.com/mapfiles/kml/paddle/grn-blank.png)', new kakao.maps.Size(20, 20));
-                } else if (!isDepot) {
-                    markerImage = new kakao.maps.MarkerImage('[https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_s.png](https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_s.png)', new kakao.maps.Size(16, 19));
-                }
-                const marker = new kakao.maps.Marker({
-                    position: latlng,
-                    map: map,
-                    image: markerImage,
-                    title: stop.name
-                });
-
                 const infowindow = new kakao.maps.InfoWindow({
                     content: `<div style="padding:5px;font-size:12px;min-width:100px;"><b>${stop.name}</b><br>도착예정: ${formatMinutesToTime(stop.arrivalTime)}</div>`,
                     removable: true
                 });
-                kakao.maps.event.addListener(marker, 'click', function() { infowindow.open(map, marker); });
 
-                // 정보 패널에 경유지/도착지만 표시
-                if (index > 0 && !isDepot) {
-                    const stopLi = document.createElement('li');
-                    let stopText = `<span>${stop.name}`;
-                    if(stop.demand > 0) stopText += ` (${stop.demand}명)`;
-                    stopText += `</span>`;
-                    const timeText = `<span class="time">${formatMinutesToTime(stop.arrivalTime)} 도착</span>`;
-                    stopLi.innerHTML = stopText + timeText;
-                    stopUl.appendChild(stopLi);
+                if (isFirstStop) {
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'custom-marker';
+                    contentDiv.innerHTML = busRoute.busId;
+
+                    const overlay = new kakao.maps.CustomOverlay({
+                        position: latlng,
+                        content: contentDiv,
+                        yAnchor: 1
+                    });
+                    overlay.setMap(map);
+
+                    contentDiv.onclick = function() {
+                       infowindow.setPosition(latlng);
+                       infowindow.setMap(map);
+                    };
+
+                } else if (isFinalDepot) {
+                    const markerImage = new kakao.maps.MarkerImage(
+                        'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
+                        new kakao.maps.Size(33, 36),
+                        { offset: new kakao.maps.Point(16, 34) }
+                    );
+                    const marker = new kakao.maps.Marker({
+                        position: latlng,
+                        map: map,
+                        image: markerImage,
+                        title: stop.name
+                    });
+                    kakao.maps.event.addListener(marker, 'click', function() {
+                        infowindow.open(map, marker);
+                    });
+
+                } else if (isIntermediateStop) {
+                    const markerImage = new kakao.maps.MarkerImage(
+                        'https://t1.daumcdn.net/mapjsapi/images/dot.png',
+                         new kakao.maps.Size(10, 10),
+                         { offset: new kakao.maps.Point(5, 5) }
+                    );
+                    const marker = new kakao.maps.Marker({
+                        position: latlng,
+                        map: map,
+                        image: markerImage,
+                        title: stop.name
+                    });
+                    kakao.maps.event.addListener(marker, 'click', function() {
+                        infowindow.open(map, marker);
+                    });
                 }
+
+                const stopLi = document.createElement('li');
+                let stopText = `<span>${stop.name}`;
+                if (stop.demand > 0) stopText += ` (${stop.demand}명)`;
+                stopText += `</span>`;
+                const timeText = `<span class="time">${formatMinutesToTime(stop.arrivalTime)} 도착</span>`;
+                stopLi.innerHTML = stopText + timeText;
+                stopUl.appendChild(stopLi);
             });
 
             routeDiv.appendChild(stopUl);
@@ -154,9 +203,9 @@
                         const pathCoordinates = segmentPath.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
                         const polyline = new kakao.maps.Polyline({
                             path: pathCoordinates,
-                            strokeWeight: 3, // 선 굵기 조정
+                            strokeWeight: 3,
                             strokeColor: routeColor,
-                            strokeOpacity: 0.6, // 투명도 추가
+                            strokeOpacity: 0.6,
                             strokeStyle: 'solid'
                         });
                         polyline.setMap(map);

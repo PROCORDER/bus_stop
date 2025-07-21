@@ -67,7 +67,7 @@ public class StopDataService {
                         // CSV에 ID가 없으므로, ST_1, ST_2 와 같이 고유 ID를 생성합니다.
                         String id = "ST_" + counter++;
                         // 수요량은 5~25 사이의 랜덤 값으로 생성합니다.
-                        long demand = random.nextInt(20) + 5;
+                        long demand = random.nextInt(4) + 2;
 
                         stops.add(new PhysicalStop(id, name, demand, lat, lon));
 

@@ -49,7 +49,7 @@ public class SolutionFormatterService {
         }
         List<String> colors = generateDistinctColors(totalUsedVehicles);
 
-        //차량의 다음 행선지가 차고지라면 그것은 운행하지 않는 것 따라서 바로 제외
+        // 차량의 다음 행선지가 차고지라면 그것은 운행하지 않는 것 따라서 바로 제외
         for (int carindex = 0; carindex < data.numVehicles; ++carindex) {
             long busstop = routing.start(carindex);
             if (routing.isEnd(solution.value(routing.nextVar(busstop)))) {
@@ -62,11 +62,11 @@ public class SolutionFormatterService {
             // 1. 먼저 '총 운행 시간' (차고지 출발 ~ 복귀)을 계산합니다.
             long totalRouteTime = 0;
             long tempIndex = routing.start(carindex);
-            long previousIndex;
+            long previousbusstop;
             while (!routing.isEnd(tempIndex)) {
-                previousIndex = tempIndex;
+                previousbusstop = tempIndex;
                 tempIndex = solution.value(routing.nextVar(tempIndex));
-                totalRouteTime += routing.getArcCostForVehicle(previousIndex, tempIndex, carindex);
+                totalRouteTime += routing.getArcCostForVehicle(previousbusstop, tempIndex, carindex);
             }
 
             // 2. 이 버스가 차고지에서 출발해야 할 시각을 역산합니다.
@@ -75,6 +75,7 @@ public class SolutionFormatterService {
             // 3. 다시 경로를 순회하며, 각 정류장의 도착 시각을 계산하고 상세 경로를 조회합니다.
             busstop = routing.start(carindex);
             long accumulatedTime = departureTime;
+            // 상세 경로를 저장하기 위한 리스트
             List<List<LatLngDto>> detailedPathSegments = new ArrayList<>();
 
             while (!routing.isEnd(busstop)) {
@@ -82,23 +83,27 @@ public class SolutionFormatterService {
                 VirtualStop vStop = data.virtualStops.get(nodeIndex);
                 long currentLoad = solution.value(capacityDimension.cumulVar(busstop));
 
-                StopDto stopDto = new StopDto(vStop.originalId, vStop.name, vStop.demand, vStop.lat, vStop.lon);
-                stopDto.setArrivalTime(accumulatedTime);
-                stopDto.setCurrentLoad(currentLoad);
-                routePathForDto.add(stopDto);
+                // [수정 1] 현재 정류장이 차고지가 아닌 경우에만 리스트에 추가
+                if (nodeIndex != data.depotIndex) {
+                    StopDto stopDto = new StopDto(vStop.originalId, vStop.name, vStop.demand, vStop.lat, vStop.lon);
+                    stopDto.setArrivalTime(accumulatedTime);
+                    stopDto.setCurrentLoad(currentLoad);
+                    routePathForDto.add(stopDto);
+                }
 
-                previousIndex = busstop;
+                previousbusstop = busstop;
                 busstop = solution.value(routing.nextVar(busstop));
-                accumulatedTime += routing.getArcCostForVehicle(previousIndex, busstop, carindex);
+                accumulatedTime += routing.getArcCostForVehicle(previousbusstop, busstop, carindex);
 
-                // 현재 구간의 상세 경로 조회
-                if (!routing.isEnd(busstop)) {
+                // [수정 2] 현재 정류장(vStop)이 차고지가 아닐 때만 상세 경로를 요청
+                if (nodeIndex != data.depotIndex) {
                     int nextNodeIndex = manager.indexToNode(busstop);
                     VirtualStop nextVStop = data.virtualStops.get(nextNodeIndex);
                     detailedPathSegments.add(kakaoApiService.getDetailedPath(vStop, nextVStop));
                 }
             }
 
+            // 반복문 종료 후, 최종 도착지(차고지) 정보는 항상 추가
             VirtualStop lastStop = data.virtualStops.get(manager.indexToNode(busstop));
             StopDto lastStopDto = new StopDto(lastStop.originalId, lastStop.name, lastStop.demand, lastStop.lat, lastStop.lon);
             lastStopDto.setArrivalTime(finalArrivalTimeTarget);
