@@ -30,9 +30,7 @@ API 호출 캐싱: 한 번 계산된 이동 시간은 **JSON 파일에 저장(�
 백엔드 프레임워크	Spring Boot	웹 서버 구축 
 최적화 엔진	Google OR-Tools	
 Kakao Mobility API	
-외부 API (클라이언트)	Kakao Maps JavaScript API
-테스트 프레임워크	JUnit 5	자바 코드의 각 기능(단위)이 올바르게 작동하는지 검증
-JSON 처리	Jackson	자바 객체(DTO)와 JSON 문자열 간의 자동 변환 처리
+Kakao Maps JavaScript API
 
 
 
