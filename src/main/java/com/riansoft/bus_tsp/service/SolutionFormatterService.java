@@ -49,9 +49,10 @@ public class SolutionFormatterService {
         }
         List<String> colors = generateDistinctColors(totalUsedVehicles);
 
-        for (int i = 0; i < data.numVehicles; ++i) {
-            long index = routing.start(i);
-            if (routing.isEnd(solution.value(routing.nextVar(index)))) {
+        //차량의 다음 행선지가 차고지라면 그것은 운행하지 않는 것 따라서 바로 제외
+        for (int carindex = 0; carindex < data.numVehicles; ++carindex) {
+            long busstop = routing.start(carindex);
+            if (routing.isEnd(solution.value(routing.nextVar(busstop)))) {
                 continue;
             }
 
@@ -60,50 +61,50 @@ public class SolutionFormatterService {
 
             // 1. 먼저 '총 운행 시간' (차고지 출발 ~ 복귀)을 계산합니다.
             long totalRouteTime = 0;
-            long tempIndex = routing.start(i);
+            long tempIndex = routing.start(carindex);
             long previousIndex;
             while (!routing.isEnd(tempIndex)) {
                 previousIndex = tempIndex;
                 tempIndex = solution.value(routing.nextVar(tempIndex));
-                totalRouteTime += routing.getArcCostForVehicle(previousIndex, tempIndex, i);
+                totalRouteTime += routing.getArcCostForVehicle(previousIndex, tempIndex, carindex);
             }
 
             // 2. 이 버스가 차고지에서 출발해야 할 시각을 역산합니다.
             long departureTime = finalArrivalTimeTarget - totalRouteTime;
 
             // 3. 다시 경로를 순회하며, 각 정류장의 도착 시각을 계산하고 상세 경로를 조회합니다.
-            index = routing.start(i);
+            busstop = routing.start(carindex);
             long accumulatedTime = departureTime;
             List<List<LatLngDto>> detailedPathSegments = new ArrayList<>();
 
-            while (!routing.isEnd(index)) {
-                int nodeIndex = manager.indexToNode(index);
+            while (!routing.isEnd(busstop)) {
+                int nodeIndex = manager.indexToNode(busstop);
                 VirtualStop vStop = data.virtualStops.get(nodeIndex);
-                long currentLoad = solution.value(capacityDimension.cumulVar(index));
+                long currentLoad = solution.value(capacityDimension.cumulVar(busstop));
 
                 StopDto stopDto = new StopDto(vStop.originalId, vStop.name, vStop.demand, vStop.lat, vStop.lon);
                 stopDto.setArrivalTime(accumulatedTime);
                 stopDto.setCurrentLoad(currentLoad);
                 routePathForDto.add(stopDto);
 
-                previousIndex = index;
-                index = solution.value(routing.nextVar(index));
-                accumulatedTime += routing.getArcCostForVehicle(previousIndex, index, i);
+                previousIndex = busstop;
+                busstop = solution.value(routing.nextVar(busstop));
+                accumulatedTime += routing.getArcCostForVehicle(previousIndex, busstop, carindex);
 
                 // 현재 구간의 상세 경로 조회
-                if (!routing.isEnd(index)) {
-                    int nextNodeIndex = manager.indexToNode(index);
+                if (!routing.isEnd(busstop)) {
+                    int nextNodeIndex = manager.indexToNode(busstop);
                     VirtualStop nextVStop = data.virtualStops.get(nextNodeIndex);
                     detailedPathSegments.add(kakaoApiService.getDetailedPath(vStop, nextVStop));
                 }
             }
 
-            VirtualStop lastStop = data.virtualStops.get(manager.indexToNode(index));
+            VirtualStop lastStop = data.virtualStops.get(manager.indexToNode(busstop));
             StopDto lastStopDto = new StopDto(lastStop.originalId, lastStop.name, lastStop.demand, lastStop.lat, lastStop.lon);
             lastStopDto.setArrivalTime(finalArrivalTimeTarget);
             routePathForDto.add(lastStopDto);
 
-            long finalLoad = solution.value(capacityDimension.cumulVar(routing.end(i)));
+            long finalLoad = solution.value(capacityDimension.cumulVar(routing.end(carindex)));
             String routeColor = colors.get(usedVehiclesCount - 1);
             busRoutes.add(new BusRouteDto(usedVehiclesCount, routePathForDto, totalRouteTime, finalLoad, routeColor, detailedPathSegments));
         }
