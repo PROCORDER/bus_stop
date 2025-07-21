@@ -71,7 +71,7 @@ private static final long MAX_SERVICE_TIME = 120;
 private static final long SEARCH_TIME_LIMIT_SECONDS = 5;  
 
 # 시연 이미지
-![img.png](img.png)
+![img_1.png](img_1.png)
 
 ## 개선 가능한 사항
 
