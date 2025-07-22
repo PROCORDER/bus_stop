@@ -285,7 +285,7 @@
                 };
             };
 
-            // ... (마커 및 폴리라인 그리는 로직은 이전과 동일) ...
+
              fullRoute.forEach((stop, index) => {
                 const latlng = new kakao.maps.LatLng(stop.lat, stop.lon);
                 bounds.extend(latlng);
@@ -328,7 +328,7 @@
             if (busRoute.detailedPath) {
                 busRoute.detailedPath.forEach(segmentPath => {
                     if (segmentPath && segmentPath.length > 0) {
-                    \
+
                         const pathCoordinates = segmentPath.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
                         const polyline = new kakao.maps.Polyline({ path: pathCoordinates, strokeWeight: 3, strokeColor: routeColor, strokeOpacity: 0.6, strokeStyle: 'solid' });
                         polyline.setMap(map);
