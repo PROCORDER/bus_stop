@@ -5,36 +5,36 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 20px; box-sizing: border-box; }
         h1 { text-align: center; }
+        #final-controls { text-align: center; margin-bottom: 20px; }
+        #finalize-all-btn { padding: 10px 20px; font-size: 1.2em; font-weight: bold; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; display: none; }
+        #finalize-all-btn:hover { background-color: #0056b3; }
         #map-container { display: flex; gap: 20px; height: 85vh; }
         #map { width: 70%; height: 100%; border: 1px solid #ccc; }
         #info-panel { width: 30%; height: 100%; overflow-y: auto; border: 1px solid #ddd; padding: 10px; box-sizing: border-box; }
-        .route-info { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-        .route-header { font-weight: bold; font-size: 1.1em; margin-bottom: 8px; }
+        .route-info { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px; transition: background-color 0.3s; }
+        .route-info.editing { background-color: #fffbe6; box-shadow: 0 0 10px rgba(255, 204, 0, 0.5); }
+        .route-info .route-header.locked { text-decoration: underline; text-decoration-color: #28a745; }
+        .route-header { font-weight: bold; font-size: 1.1em; margin-bottom: 8px; display: flex; align-items: center; flex-wrap: wrap; }
+        .header-main-content { display: inline-block; }
         .route-header span { display: inline-block; width: 15px; height: 15px; margin-right: 8px; vertical-align: middle; }
         .route-header .departure-time { font-size: 0.9em; font-weight: normal; color: #555; }
         .stop-list { list-style-type: none; padding-left: 20px; font-size: 0.9em; }
         .stop-list li { padding: 4px 0; display: flex; justify-content: space-between; align-items: center; }
         .stop-list .time { font-weight: bold; color: #333; background-color: #f0f0f0; padding: 2px 5px; border-radius: 4px;}
-
-        /* 커스텀 마커 스타일 */
-        .custom-marker {
-            background-color: #007BFF; /* 배경색 */
-            color: white;             /* 글자색 */
-            font-weight: bold;
-            font-size: 14px;
-            width: 28px;
-            height: 28px;
-            line-height: 28px;        /* 글자를 세로 중앙에 위치 */
-            text-align: center;         /* 글자를 가로 중앙에 위치 */
-            border-radius: 50%;       /* 원 모양으로 만듦 */
-            border: 2px solid white;  /* 흰색 테두리 */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.4); /* 그림자 효과 */
-            cursor: pointer;          /* 마우스 커서를 포인터로 변경 */
-        }
+        .stop-list .delete-btn { background: #ff4d4d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 2px 6px; margin-left: 5px;}
+        .lock-container { display: inline-flex; align-items: center; font-size: 0.8em; margin-left: auto; padding-left: 10px; }
+        .lock-container input { margin-right: 4px; transform: scale(1.2); }
+        .custom-marker { background-color: #007BFF; color: white; font-weight: bold; font-size: 14px; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.4); cursor: pointer; }
+        #add-stop-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1000; display: none; }
+        #modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; display: none; }
     </style>
 </head>
 <body>
 <h1>셔틀버스 최적 경로 결과</h1>
+
+<div id="final-controls">
+    <button id="finalize-all-btn">고정된 경로로 재계산 요청</button>
+</div>
 
 <div id="map-container">
     <div id="map"></div>
@@ -43,41 +43,62 @@
     </div>
 </div>
 
+<div id="modal-backdrop"></div>
+<div id="add-stop-modal">
+    <h4>어디에 추가하시겠습니까?</h4>
+    <p><b id="new-stop-name"></b> 정류장을...</p>
+    <select id="insert-before-select"></select> 앞에 추가
+    <div style="margin-top: 20px; text-align: right;">
+        <button id="confirm-add-btn">추가</button>
+        <button id="cancel-add-btn">취소</button>
+    </div>
+</div>
+
 <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=36f72665851b8b0c6f1061f9c532a308&libraries=services,clusterer,drawing"></script>
 
 <script>
     const mapContainer = document.getElementById('map');
-    const mapOption = {
-        center: new kakao.maps.LatLng(37.566826, 126.9786567),
-        level: 8
-    };
+    const mapOption = { center: new kakao.maps.LatLng(37.566826, 126.9786567), level: 8 };
     const map = new kakao.maps.Map(mapContainer, mapOption);
+
+    let currentlyEditing = { busId: null, routeDiv: null, originalStops: [], editedStops: [] };
+    let stopToAdd = null;
+    let lockedRoutes = new Map(); // 고정된 경로들을 담는 Map
+
+    const finalizeAllBtn = document.getElementById('finalize-all-btn');
+
+    finalizeAllBtn.onclick = function() {
+        if (lockedRoutes.size === 0) { alert('고정된 경로가 없습니다.'); return; }
+
+        const payload = {
+            modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops }))
+        };
+
+        fetch('/api/apply-edits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        })
+        .then(response => { if (!response.ok) throw new Error('서버 전송 실패'); return response.text(); })
+        .then(data => {
+            alert('고정된 경로를 기반으로 재계산 요청을 보냈습니다. (실제 재계산 로직은 백엔드에 구현 필요)');
+            // 실제 운영시에는 재계산된 결과를 받아와서 화면을 다시 그려야 함
+            // 예: fetch('/api/re-optimize').then(...) -> drawRoutesAndInfo(newSolution)
+        })
+        .catch(error => alert('오류: ' + error.message));
+    };
 
     window.onload = function() {
         fetch('/api/optimize-route')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('서버 응답 오류: ' + response.status);
-                }
-                return response.json();
-            })
+            .then(response => { if (!response.ok) throw new Error('서버 응답 오류: ' + response.status); return response.json(); })
             .then(data => {
                 if(!data || !data.busRoutes || data.busRoutes.length === 0){
-                     document.getElementById('status').innerText = '오류: 서버에서 해답을 찾지 못했습니다.';
-                     return;
+                     document.getElementById('status').innerText = '오류: 서버에서 해답을 찾지 못했습니다.'; return;
                 }
-                console.log("서버로부터 받은 경로 데이터:", data);
-                const statusDiv = document.getElementById('status');
-                statusDiv.innerHTML = `<h3>총 운행 정보</h3>
-                                       <p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p>
-                                       <hr>`;
-                statusDiv.style.textAlign = 'left';
+                document.getElementById('status').innerHTML = `<h3>총 운행 정보</h3><p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p><hr>`;
                 drawRoutesAndInfo(data.busRoutes);
             })
-            .catch(error => {
-                document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.';
-                console.error('Error:', error);
-            });
+            .catch(error => { document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.'; console.error('Error:', error); });
     };
 
     function formatMinutesToTime(totalMinutes) {
@@ -86,6 +107,71 @@
         const m = (totalMinutes % 60).toString().padStart(2, '0');
         return `${h}:${m}`;
     }
+
+    function exitEditMode() {
+        if (currentlyEditing.routeDiv) currentlyEditing.routeDiv.classList.remove('editing');
+        currentlyEditing = { busId: null, routeDiv: null, originalStops: [], editedStops: [] };
+    }
+
+    function redrawStopList(ulElement, stops, isEditing) {
+        ulElement.innerHTML = '';
+        stops.forEach((stop, index) => {
+            const stopLi = document.createElement('li');
+            let stopText = `<span>${stop.name}`;
+            if (stop.demand > 0) stopText += ` (${stop.demand}명)`;
+            stopText += `</span>`;
+
+            if (isEditing && !stop.id.startsWith("DEPOT")) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerText = '삭제';
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.onclick = () => {
+                    currentlyEditing.editedStops.splice(index, 1);
+                    redrawStopList(ulElement, currentlyEditing.editedStops, true);
+                };
+                stopLi.innerHTML = stopText;
+                stopLi.appendChild(deleteBtn);
+            } else {
+                 const timeText = `<span class="time">${formatMinutesToTime(stop.arrivalTime)} 도착</span>`;
+                stopLi.innerHTML = stopText + timeText;
+            }
+            ulElement.appendChild(stopLi);
+        });
+    }
+
+    function showAddStopModal(newStop) {
+        stopToAdd = newStop;
+        document.getElementById('new-stop-name').innerText = newStop.name;
+        const select = document.getElementById('insert-before-select');
+        select.innerHTML = '';
+        currentlyEditing.editedStops.forEach(stop => {
+            const option = document.createElement('option');
+            option.value = stop.id;
+            option.innerText = stop.name;
+            select.appendChild(option);
+        });
+        document.getElementById('modal-backdrop').style.display = 'block';
+        document.getElementById('add-stop-modal').style.display = 'block';
+    }
+
+    function hideAddStopModal() {
+        document.getElementById('modal-backdrop').style.display = 'none';
+        document.getElementById('add-stop-modal').style.display = 'none';
+        stopToAdd = null;
+    }
+
+    document.getElementById('confirm-add-btn').onclick = function() {
+        const select = document.getElementById('insert-before-select');
+        const insertBeforeId = select.value;
+        const insertIndex = currentlyEditing.editedStops.findIndex(s => s.id === insertBeforeId);
+
+        if (insertIndex !== -1 && stopToAdd) {
+            currentlyEditing.editedStops.splice(insertIndex, 0, stopToAdd);
+            redrawStopList(currentlyEditing.routeDiv.querySelector('.stop-list'), currentlyEditing.editedStops, true);
+        }
+        hideAddStopModal();
+    };
+    document.getElementById('cancel-add-btn').onclick = hideAddStopModal;
 
     function drawRoutesAndInfo(busRoutes) {
         const bounds = new kakao.maps.LatLngBounds();
@@ -103,120 +189,155 @@
             header.className = 'route-header';
 
             const departureTime = fullRoute[0].arrivalTime - (busRoute.routeTime - (fullRoute[fullRoute.length - 1].arrivalTime - fullRoute[0].arrivalTime));
-            header.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)
+
+            const headerContent = document.createElement('div');
+            headerContent.className = 'header-main-content';
+            headerContent.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)
                                 <div class="departure-time">예상 출발(차고지): ${formatMinutesToTime(departureTime)}</div>`;
+            header.appendChild(headerContent);
+
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.marginLeft = '10px';
+
+            const editButton = document.createElement('button');
+            editButton.innerText = '경로 수정';
+            editButton.style.fontSize = '0.8em';
+            buttonContainer.appendChild(editButton);
+
+            header.appendChild(buttonContainer);
+
+            // --- [핵심 수정] '경로 고정' 스위치 추가 ---
+            const lockContainer = document.createElement('div');
+            lockContainer.className = 'lock-container';
+            const lockCheckbox = document.createElement('input');
+            lockCheckbox.type = 'checkbox';
+            lockCheckbox.id = `lock-bus-${busRoute.busId}`;
+            const lockLabel = document.createElement('label');
+            lockLabel.htmlFor = lockCheckbox.id;
+            lockLabel.innerText = '경로 고정';
+
+            lockCheckbox.onchange = function() {
+                if (this.checked) {
+                    lockedRoutes.set(busRoute.busId, busRoute.route);
+                    header.classList.add('locked');
+                } else {
+                    lockedRoutes.delete(busRoute.busId);
+                    header.classList.remove('locked');
+                }
+                finalizeAllBtn.style.display = lockedRoutes.size > 0 ? 'block' : 'none';
+            };
+
+            lockContainer.append(lockCheckbox, lockLabel);
+            header.appendChild(lockContainer);
+            // --- 수정 끝 ---
+
             routeDiv.appendChild(header);
 
             const stopUl = document.createElement('ul');
             stopUl.className = 'stop-list';
+            redrawStopList(stopUl, fullRoute, false);
+            routeDiv.appendChild(stopUl);
+            infoPanel.appendChild(routeDiv);
 
-            fullRoute.forEach((stop, index) => {
+            editButton.onclick = function(event) {
+                event.stopPropagation();
+                if (currentlyEditing.busId) { alert('다른 경로를 수정 중입니다. 먼저 완료하거나 취소해주세요.'); return; }
+
+                currentlyEditing = { busId: busRoute.busId, routeDiv, originalStops: [...fullRoute], editedStops: [...fullRoute] };
+                routeDiv.classList.add('editing');
+                lockCheckbox.disabled = true; // 수정 중에는 고정 스위치 비활성화
+                redrawStopList(stopUl, currentlyEditing.editedStops, true);
+
+                editButton.style.display = 'none';
+                const saveButton = document.createElement('button');
+                saveButton.innerText = '수정 완료';
+                saveButton.style.cssText = 'font-size: 0.8em; background-color: #28a745; color: white;';
+
+                const cancelButton = document.createElement('button');
+                cancelButton.innerText = '취소';
+                cancelButton.style.cssText = 'font-size: 0.8em; margin-left: 5px;';
+
+                buttonContainer.append(saveButton, cancelButton);
+
+                saveButton.onclick = function() {
+                    // [수정] 수정된 경로를 lockedRoutes에 저장하고, 고정 스위치를 자동으로 켬
+                    lockedRoutes.set(busRoute.busId, currentlyEditing.editedStops);
+                    lockCheckbox.checked = true;
+                    header.classList.add('locked');
+                    finalizeAllBtn.style.display = 'block';
+                    alert(`버스 #${busRoute.busId}의 수정사항이 임시 저장(고정)되었습니다.`);
+
+                    redrawStopList(stopUl, currentlyEditing.editedStops, false);
+                    editButton.style.display = 'inline-block';
+                    lockCheckbox.disabled = false;
+                    buttonContainer.removeChild(saveButton);
+                    buttonContainer.removeChild(cancelButton);
+                    exitEditMode();
+                };
+
+                cancelButton.onclick = function() {
+                    redrawStopList(stopUl, currentlyEditing.originalStops, false);
+                    editButton.style.display = 'inline-block';
+                    lockCheckbox.disabled = false;
+                    buttonContainer.removeChild(saveButton);
+                    buttonContainer.removeChild(cancelButton);
+                    exitEditMode();
+                };
+            };
+
+            // ... (마커 및 폴리라인 그리는 로직은 이전과 동일) ...
+             fullRoute.forEach((stop, index) => {
                 const latlng = new kakao.maps.LatLng(stop.lat, stop.lon);
                 bounds.extend(latlng);
-
                 const isDepot = stop.id.startsWith("DEPOT");
+
+                const handleMarkerClick = () => {
+                    if (currentlyEditing.busId && !isDepot) {
+                        showAddStopModal(stop);
+                    } else {
+                        const infowindow = new kakao.maps.InfoWindow({
+                            content: `<div style="padding:5px;font-size:12px;"><b>${stop.name}</b><br>도착예정: ${formatMinutesToTime(stop.arrivalTime)}</div>`,
+                            removable: true
+                        });
+                        infowindow.open(map, marker);
+                        if(!marker) infowindow.setPosition(latlng);
+                    }
+                };
+
+                let marker;
                 const isFirstStop = index === 0 && !isDepot;
-                const isFinalDepot = index === fullRoute.length - 1 && isDepot;
-                const isIntermediateStop = !isFirstStop && !isFinalDepot && !isDepot;
-
-                if (isIntermediateStop) {
-                    const circle = new kakao.maps.Circle({
-                        center: latlng,
-                        radius: 200,
-                        fillColor: routeColor,
-                        fillOpacity: 0.8,
-                        strokeOpacity: 0,
-                    });
-                    circle.setMap(map);
-                }
-
-                const infowindow = new kakao.maps.InfoWindow({
-                    content: `<div style="padding:5px;font-size:12px;min-width:100px;"><b>${stop.name}</b><br>도착예정: ${formatMinutesToTime(stop.arrivalTime)}</div>`,
-                    removable: true
-                });
-
                 if (isFirstStop) {
                     const contentDiv = document.createElement('div');
                     contentDiv.className = 'custom-marker';
                     contentDiv.innerHTML = busRoute.busId;
-
-                    const overlay = new kakao.maps.CustomOverlay({
-                        position: latlng,
-                        content: contentDiv,
-                        yAnchor: 1
-                    });
+                    const overlay = new kakao.maps.CustomOverlay({ position: latlng, content: contentDiv, yAnchor: 1 });
                     overlay.setMap(map);
-
-                    contentDiv.onclick = function() {
-                       infowindow.setPosition(latlng);
-                       infowindow.setMap(map);
-                    };
-
-                } else if (isFinalDepot) {
-                    const markerImage = new kakao.maps.MarkerImage(
-                        'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
-                        new kakao.maps.Size(33, 36),
-                        { offset: new kakao.maps.Point(16, 34) }
-                    );
-                    const marker = new kakao.maps.Marker({
-                        position: latlng,
-                        map: map,
-                        image: markerImage,
-                        title: stop.name
-                    });
-                    kakao.maps.event.addListener(marker, 'click', function() {
-                        infowindow.open(map, marker);
-                    });
-
-                } else if (isIntermediateStop) {
-                    const markerImage = new kakao.maps.MarkerImage(
-                        'https://t1.daumcdn.net/mapjsapi/images/dot.png',
-                         new kakao.maps.Size(10, 10),
-                         { offset: new kakao.maps.Point(5, 5) }
-                    );
-                    const marker = new kakao.maps.Marker({
-                        position: latlng,
-                        map: map,
-                        image: markerImage,
-                        title: stop.name
-                    });
-                    kakao.maps.event.addListener(marker, 'click', function() {
-                        infowindow.open(map, marker);
-                    });
+                    contentDiv.onclick = handleMarkerClick;
+                } else if (!isDepot) {
+                    const circle = new kakao.maps.Circle({ center: latlng, radius: 200, fillColor: routeColor, fillOpacity: 0.8, strokeOpacity: 0 });
+                    circle.setMap(map);
+                    const markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/mapjsapi/images/dot.png', new kakao.maps.Size(10, 10), { offset: new kakao.maps.Point(5, 5) });
+                    marker = new kakao.maps.Marker({ position: latlng, map, image: markerImage, title: stop.name });
+                    kakao.maps.event.addListener(marker, 'click', handleMarkerClick);
+                } else { // 차고지인 경우
+                     const markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', new kakao.maps.Size(33, 36), { offset: new kakao.maps.Point(16, 34) });
+                    marker = new kakao.maps.Marker({ position: latlng, map, image: markerImage, title: stop.name });
                 }
-
-                const stopLi = document.createElement('li');
-                let stopText = `<span>${stop.name}`;
-                if (stop.demand > 0) stopText += ` (${stop.demand}명)`;
-                stopText += `</span>`;
-                const timeText = `<span class="time">${formatMinutesToTime(stop.arrivalTime)} 도착</span>`;
-                stopLi.innerHTML = stopText + timeText;
-                stopUl.appendChild(stopLi);
             });
-
-            routeDiv.appendChild(stopUl);
-            infoPanel.appendChild(routeDiv);
 
             if (busRoute.detailedPath) {
                 busRoute.detailedPath.forEach(segmentPath => {
                     if (segmentPath && segmentPath.length > 0) {
+                    \
                         const pathCoordinates = segmentPath.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
-                        const polyline = new kakao.maps.Polyline({
-                            path: pathCoordinates,
-                            strokeWeight: 3,
-                            strokeColor: routeColor,
-                            strokeOpacity: 0.6,
-                            strokeStyle: 'solid'
-                        });
+                        const polyline = new kakao.maps.Polyline({ path: pathCoordinates, strokeWeight: 3, strokeColor: routeColor, strokeOpacity: 0.6, strokeStyle: 'solid' });
                         polyline.setMap(map);
                     }
                 });
             }
         });
 
-        if (!bounds.isEmpty()) {
-            map.setBounds(bounds);
-        }
+        if (!bounds.isEmpty()) map.setBounds(bounds);
     }
 </script>
 </body>
