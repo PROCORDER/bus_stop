@@ -150,7 +150,7 @@ public class KakaoApiService {
         }
         return finalMatrix;
     }
-    private long getDurationInMinutes(VirtualStop origin, VirtualStop destination) {
+    public long getDurationInMinutes(VirtualStop origin, VirtualStop destination) {
         String url = String.format("https://apis-navi.kakaomobility.com/v1/directions?origin=%s,%s&destination=%s,%s",
                 origin.lon, origin.lat, destination.lon, destination.lat);
         HttpHeaders headers = new HttpHeaders();
