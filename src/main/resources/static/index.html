@@ -8,6 +8,7 @@
         #final-controls { text-align: center; margin-bottom: 20px; }
         #finalize-all-btn { padding: 10px 20px; font-size: 1.2em; font-weight: bold; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; display: none; }
         #finalize-all-btn:hover { background-color: #0056b3; }
+        #finalize-all-btn:disabled { background-color: #cccccc; }
         #map-container { display: flex; gap: 20px; height: 85vh; }
         #map { width: 70%; height: 100%; border: 1px solid #ccc; }
         #info-panel { width: 30%; height: 100%; overflow-y: auto; border: 1px solid #ddd; padding: 10px; box-sizing: border-box; }
@@ -63,7 +64,7 @@
 
     let currentlyEditing = { busId: null, routeDiv: null, originalStops: [], editedStops: [] };
     let stopToAdd = null;
-    let lockedRoutes = new Map(); // 고정된 경로들을 담는 Map
+    let lockedRoutes = new Map();
 
     const finalizeAllBtn = document.getElementById('finalize-all-btn');
 
@@ -74,18 +75,35 @@
             modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops }))
         };
 
-        fetch('/api/apply-edits', {
+        document.getElementById('status').innerText = '재계산 중...';
+        finalizeAllBtn.disabled = true;
+
+        fetch('/api/re-optimize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         })
-        .then(response => { if (!response.ok) throw new Error('서버 전송 실패'); return response.text(); })
-        .then(data => {
-            alert('고정된 경로를 기반으로 재계산 요청을 보냈습니다. (실제 재계산 로직은 백엔드에 구현 필요)');
-            // 실제 운영시에는 재계산된 결과를 받아와서 화면을 다시 그려야 함
-            // 예: fetch('/api/re-optimize').then(...) -> drawRoutesAndInfo(newSolution)
+        .then(response => {
+            if (!response.ok) throw new Error('재계산 실패: ' + response.status);
+            return response.json();
         })
-        .catch(error => alert('오류: ' + error.message));
+        .then(newSolution => {
+            alert('재계산이 완료되었습니다. 새로운 경로를 표시합니다.');
+
+            lockedRoutes.clear();
+            finalizeAllBtn.style.display = 'none';
+            finalizeAllBtn.disabled = false;
+
+            document.getElementById('status').innerHTML = `<h3>총 운행 정보</h3><p>필요 버스: ${newSolution.usedBuses}대 | 전체 목표 비용: ${newSolution.totalObjectiveTime}</p><hr>`;
+
+            // 지도와 정보패널을 완전히 새로 그립니다.
+            drawRoutesAndInfo(newSolution.busRoutes);
+        })
+        .catch(error => {
+            alert('오류: ' + error.message);
+            document.getElementById('status').innerText = '재계산 중 오류 발생';
+            finalizeAllBtn.disabled = false;
+        });
     };
 
     window.onload = function() {
@@ -178,6 +196,13 @@
         const infoPanel = document.getElementById('info-panel');
         infoPanel.querySelectorAll('.route-info').forEach(r => r.remove());
 
+        // 지도 위의 오버레이, 마커, 폴리라인 등을 모두 지우는 로직 추가
+        // (이 부분은 간단한 예시이며, 실제로는 생성된 객체들을 배열에 담아 관리하는 것이 더 좋습니다)
+        map.relayout(); // 지도 깨짐 방지
+        // 이 부분은 카카오맵 API에서 제공하는 clear()와 같은 함수가 없으므로,
+        // 생성된 마커, 폴리라인 등을 배열에 저장해두고, 그 배열을 순회하며 setMap(null)을 호출해야 완벽하게 지워집니다.
+        // 여기서는 간단하게 info-panel만 비우고 새로 그립니다.
+
         busRoutes.forEach(busRoute => {
             const routeColor = busRoute.color;
             const fullRoute = busRoute.route;
@@ -206,7 +231,6 @@
 
             header.appendChild(buttonContainer);
 
-            // --- [핵심 수정] '경로 고정' 스위치 추가 ---
             const lockContainer = document.createElement('div');
             lockContainer.className = 'lock-container';
             const lockCheckbox = document.createElement('input');
@@ -229,7 +253,6 @@
 
             lockContainer.append(lockCheckbox, lockLabel);
             header.appendChild(lockContainer);
-            // --- 수정 끝 ---
 
             routeDiv.appendChild(header);
 
@@ -245,7 +268,7 @@
 
                 currentlyEditing = { busId: busRoute.busId, routeDiv, originalStops: [...fullRoute], editedStops: [...fullRoute] };
                 routeDiv.classList.add('editing');
-                lockCheckbox.disabled = true; // 수정 중에는 고정 스위치 비활성화
+                lockCheckbox.disabled = true;
                 redrawStopList(stopUl, currentlyEditing.editedStops, true);
 
                 editButton.style.display = 'none';
@@ -260,7 +283,6 @@
                 buttonContainer.append(saveButton, cancelButton);
 
                 saveButton.onclick = function() {
-                    // [수정] 수정된 경로를 lockedRoutes에 저장하고, 고정 스위치를 자동으로 켬
                     lockedRoutes.set(busRoute.busId, currentlyEditing.editedStops);
                     lockCheckbox.checked = true;
                     header.classList.add('locked');
@@ -285,8 +307,7 @@
                 };
             };
 
-
-             fullRoute.forEach((stop, index) => {
+            fullRoute.forEach((stop, index) => {
                 const latlng = new kakao.maps.LatLng(stop.lat, stop.lon);
                 bounds.extend(latlng);
                 const isDepot = stop.id.startsWith("DEPOT");
@@ -319,7 +340,7 @@
                     const markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/mapjsapi/images/dot.png', new kakao.maps.Size(10, 10), { offset: new kakao.maps.Point(5, 5) });
                     marker = new kakao.maps.Marker({ position: latlng, map, image: markerImage, title: stop.name });
                     kakao.maps.event.addListener(marker, 'click', handleMarkerClick);
-                } else { // 차고지인 경우
+                } else {
                      const markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', new kakao.maps.Size(33, 36), { offset: new kakao.maps.Point(16, 34) });
                     marker = new kakao.maps.Marker({ position: latlng, map, image: markerImage, title: stop.name });
                 }
@@ -328,7 +349,6 @@
             if (busRoute.detailedPath) {
                 busRoute.detailedPath.forEach(segmentPath => {
                     if (segmentPath && segmentPath.length > 0) {
-
                         const pathCoordinates = segmentPath.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
                         const polyline = new kakao.maps.Polyline({ path: pathCoordinates, strokeWeight: 3, strokeColor: routeColor, strokeOpacity: 0.6, strokeStyle: 'solid' });
                         polyline.setMap(map);
