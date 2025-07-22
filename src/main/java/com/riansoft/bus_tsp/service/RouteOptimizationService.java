@@ -20,7 +20,7 @@ import java.util.List;
 public class RouteOptimizationService {
 
     // --- 주요 파라미터 상수 정의 ---
-    private static final int VEHICLE_CAPACITY = 45;
+    public static final int VEHICLE_CAPACITY = 45;
     private static final int MAX_VEHICLES = 10000;
     private static final long STOP_TO_STOP_TIME_LIMIT = 20;
     private static final long PENALTY_FOR_EXCEEDING_TIME = 100000;
