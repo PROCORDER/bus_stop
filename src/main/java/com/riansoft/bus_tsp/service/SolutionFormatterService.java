@@ -30,6 +30,10 @@ public class SolutionFormatterService {
         this.stopDataService = stopDataService;
     }
 
+    /**
+     * OR-Tools의 계산 결과를 바탕으로, 각 정류장별 도착 시간을 역산하고,
+     * 상세 경로를 조회하여 최종 DTO로 변환합니다.
+     */
     public RouteSolutionDto formatSolutionToDto(DataModel data, RoutingIndexManager manager, RoutingModel routing, Assignment solution) {
         List<BusRouteDto> busRoutes = new ArrayList<>();
         int usedVehiclesCount = 0;
@@ -84,14 +88,11 @@ public class SolutionFormatterService {
                 busstop = solution.value(routing.nextVar(busstop));
                 accumulatedTime += routing.getArcCostForVehicle(previousbusstop, busstop, carindex);
 
-                // --- [핵심 수정] ---
-                // 현재 정류장이 차고지가 아니기만 하면, 다음 목적지(차고지 포함)까지의 상세 경로를 요청합니다.
                 if (nodeIndex != data.depotIndex) {
                     int nextNodeIndex = manager.indexToNode(busstop);
                     VirtualStop nextVStop = data.virtualStops.get(nextNodeIndex);
                     detailedPathSegments.add(kakaoApiService.getDetailedPath(vStop, nextVStop));
                 }
-                // --- 수정 끝 ---
             }
 
             VirtualStop lastStop = data.virtualStops.get(manager.indexToNode(busstop));
@@ -107,6 +108,9 @@ public class SolutionFormatterService {
         return new RouteSolutionDto(solution.objectiveValue(), usedVehiclesCount, busRoutes);
     }
 
+    /**
+     * 고정 경로와 신규 경로를 병합하고, 최종 포맷팅하여 반환합니다.
+     */
     public RouteSolutionDto formatMergedSolution(List<BusRouteDto> lockedRoutes, List<BusRouteDto> newlyOptimizedRoutes) {
         List<BusRouteDto> finalBusRoutes = new ArrayList<>();
         finalBusRoutes.addAll(lockedRoutes);
@@ -116,35 +120,36 @@ public class SolutionFormatterService {
         final long finalArrivalTimeTarget = 9 * 60;
 
         List<VirtualStop> allStops = stopDataService.getVirtualStops(RouteOptimizationService.VEHICLE_CAPACITY);
-        VirtualStop depot = allStops.get(0);
 
         for (int i = 0; i < finalBusRoutes.size(); i++) {
             BusRouteDto route = finalBusRoutes.get(i);
             route.setBusId(i + 1);
             route.setColor(colors.get(i));
 
-            long totalRouteTime = route.getRouteTime();
-            long departureTime = finalArrivalTimeTarget - totalRouteTime;
-            long accumulatedTime = departureTime;
-
             List<StopDto> stops = route.getRoute();
+            if (stops.isEmpty()) continue;
 
-            if (!stops.isEmpty() && !stops.get(0).getId().startsWith("DEPOT")) {
-                VirtualStop firstStop = findVirtualStop(allStops, stops.get(0));
-                accumulatedTime += kakaoApiService.getDurationInMinutes(depot, firstStop);
-            }
+            // 1. '첫 경유지 도착 시간'을 먼저 계산합니다.
+            long totalRouteTime = route.getRouteTime();
+            long firstStopArrivalTime = finalArrivalTimeTarget - totalRouteTime;
+            long accumulatedTime = firstStopArrivalTime;
 
-            for (int j = 0; j < stops.size(); j++) {
+            // 2. 첫 경유지부터 마지막 '경유지'까지만 순회하며 도착 시간을 설정합니다.
+            for (int j = 0; j < stops.size() - 1; j++) {
                 StopDto currentStop = stops.get(j);
                 currentStop.setArrivalTime(accumulatedTime);
 
-                if (j < stops.size() - 1) {
-                    StopDto nextStop = stops.get(j + 1);
-                    VirtualStop origin = findVirtualStop(allStops, currentStop);
-                    VirtualStop destination = findVirtualStop(allStops, nextStop);
+                StopDto nextStop = stops.get(j + 1);
+                VirtualStop origin = findVirtualStop(allStops, currentStop);
+                VirtualStop destination = findVirtualStop(allStops, nextStop);
+                if (origin != null && destination != null) {
                     accumulatedTime += kakaoApiService.getDurationInMinutes(origin, destination);
                 }
             }
+
+            // 3. 마지막 정류장(차고지)의 도착 시간은 항상 목표 시간(9시)으로 강제 설정합니다.
+            StopDto lastStop = stops.get(stops.size() - 1);
+            lastStop.setArrivalTime(finalArrivalTimeTarget);
         }
 
         long totalObjectiveTime = finalBusRoutes.stream().mapToLong(BusRouteDto::getRouteTime).sum();
