@@ -60,7 +60,7 @@ public class RouteOptimizationService {
     }
 
     /**
-     * [새로운 메서드] 고정된 제약조건으로 경로를 재계산합니다.
+     * 고정된 제약조건으로 경로를 재계산합니다.
      */
     public RouteSolutionDto reOptimizeWithConstraints(RouteModificationRequestDto request) {
         System.out.println("\n========= [RE-OPTIMIZE] 재계산 시작 ==========");
@@ -84,10 +84,12 @@ public class RouteOptimizationService {
             List<StopDto> routeStops = lockedRoute.getNewRoute();
 
             List<List<LatLngDto>> detailedPath = new ArrayList<>();
-            // (차고지->첫경유지 상세경로) 와 (경유지->경유지 상세경로) 추가
             if (!routeStops.isEmpty()) {
-                VirtualStop depot = allVirtualStops.get(0);
-                detailedPath.add(kakaoApiService.getDetailedPath(depot, findVirtualStop(allVirtualStops, routeStops.get(0))));
+                //  차고지->첫경유지 상세경로 API 호출 로직을 삭제 ---
+                // VirtualStop depot = allVirtualStops.get(0);
+                // detailedPath.add(kakaoApiService.getDetailedPath(depot, findVirtualStop(allVirtualStops, routeStops.get(0))));
+
+                // '경유지 -> 경유지' 상세 경로만 추가
                 for (int i = 0; i < routeStops.size() - 1; i++) {
                     detailedPath.add(kakaoApiService.getDetailedPath(findVirtualStop(allVirtualStops, routeStops.get(i)), findVirtualStop(allVirtualStops, routeStops.get(i + 1))));
                 }
@@ -113,7 +115,7 @@ public class RouteOptimizationService {
     }
 
     /**
-     * [리팩토링] OR-Tools Solver를 실행하는 공통 로직
+     * OR-Tools Solver를 실행하는 공통 로직
      */
     private RouteSolutionDto runSolver(DataModel data) {
         preCheckStops(data);
@@ -184,7 +186,6 @@ public class RouteOptimizationService {
         System.out.println("----------------------------------------------------------------------\n");
     }
 
-    // DataModel 생성을 위한 헬퍼 메서드 (timeMatrix 생성을 내부로 포함)
     private DataModel createDataModel(List<VirtualStop> virtualStops) {
         long[][] timeMatrix = kakaoApiService.createTimeMatrixFromApi(virtualStops);
         long[] vehicleCapacities = new long[MAX_VEHICLES];
@@ -194,7 +195,6 @@ public class RouteOptimizationService {
         return new DataModel(timeMatrix, virtualStops, MAX_VEHICLES, vehicleCapacities);
     }
 
-    // findVirtualStop 헬퍼 메서드 추가
     private VirtualStop findVirtualStop(List<VirtualStop> allStops, StopDto targetStop) {
         return allStops.stream()
                 .filter(vs -> vs.originalId.equals(targetStop.getId()) && targetStop.getName().startsWith(vs.name.split("-")[0]))
