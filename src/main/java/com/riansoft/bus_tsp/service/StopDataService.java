@@ -50,7 +50,7 @@ public class StopDataService {
         stops.add(new PhysicalStop("DEPOT_YJ", "쿠팡 광주 3센터", 0, 37.347, 127.1965));
 
         // resources/location.csv 파일을 읽어옵니다.
-        try (InputStream inputStream = new ClassPathResource("location.csv").getInputStream();
+        try (InputStream inputStream = new ClassPathResource("location2.csv").getInputStream();
              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
 
             String line;
@@ -67,7 +67,7 @@ public class StopDataService {
                         // CSV에 ID가 없으므로, ST_1, ST_2 와 같이 고유 ID를 생성합니다.
                         String id = "ST_" + counter++;
                         // 수요량은 5~25 사이의 랜덤 값으로 생성합니다.
-                        long demand = random.nextInt(4) + 2;
+                        long demand = random.nextInt(5) + 2;
 
                         stops.add(new PhysicalStop(id, name, demand, lat, lon));
 
@@ -77,13 +77,13 @@ public class StopDataService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("location.csv 파일 읽기 중 오류 발생");
+            System.err.println("location2.csv 파일 읽기 중 오류 발생");
             e.printStackTrace();
             // 파일 읽기 실패 시, 비상용 기본 데이터 반환 (선택 사항)
             return createDefaultStopsForEmergency();
         }
 
-        System.out.println("location.csv 파일로부터 총 " + (stops.size() -1) + "개의 정류장을 성공적으로 로드했습니다.");
+        System.out.println("location2.csv 파일로부터 총 " + (stops.size() -1) + "개의 정류장을 성공적으로 로드했습니다.");
         return stops;
     }
 
