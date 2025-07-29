@@ -56,22 +56,6 @@ function setupEventListeners() {
         };
     }
 
-    // [추가] 폴리곤 초기화 버튼 이벤트 핸들러
-    const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
-    if (clearPolygonsBtn) {
-        clearPolygonsBtn.onclick = function() {
-            if (drawingManager) {
-                const data = drawingManager.getData();
-                const polygons = data.POLYGON || []; // 그려진 폴리곤 데이터 가져오기
-                polygons.forEach(polygon => {
-                    polygon.setMap(null); // 각 폴리곤을 지도에서 제거
-                });
-                // DrawingManager의 내부 상태도 초기화 (선택 해제 및 데이터 리셋)
-                drawingManager.cancel();
-                drawingManager.setData({});
-            }
-        };
-    }
 
     const startBtn = document.getElementById('start-optimization-btn');
     startBtn.onclick = function() {
