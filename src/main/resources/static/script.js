@@ -37,7 +37,7 @@ finalizeAllBtn.onclick = function() {
         finalizeAllBtn.disabled = false;
     });
 };
-
+/*
 window.onload = function() {
     fetch('/api/optimize-route')
         .then(response => { if (!response.ok) throw new Error('서버 응답 오류: ' + response.status); return response.json(); })
@@ -49,8 +49,38 @@ window.onload = function() {
             drawRoutesAndInfo(data.busRoutes);
         })
         .catch(error => { document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.'; console.error('Error:', error); });
-};
+};*/
+const startBtn = document.getElementById('start-optimization-btn');
 
+startBtn.onclick = function() {
+    // UI를 '계산 중' 상태로 변경하고 버튼을 비활성화합니다.
+    document.getElementById('status').innerText = '경로 계산 계산 중';
+    startBtn.disabled = true;
+
+    fetch('/api/optimize-route')
+        .then(response => {
+            if (!response.ok) throw new Error('서버 응답 오류: ' + response.status);
+            return response.json();
+        })
+        .then(data => {
+            if (!data || !data.busRoutes || data.busRoutes.length === 0) {
+                document.getElementById('status').innerText = '오류: 서버에서 해답을 찾지 못했습니다.';
+                startBtn.disabled = false; // 실패 시 버튼 다시 활성화
+                return;
+            }
+
+            // 계산 성공 시, 시작 버튼은 숨깁니다.
+            startBtn.style.display = 'none';
+
+            document.getElementById('status').innerHTML = `<h3>총 운행 정보</h3><p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p><hr>`;
+            drawRoutesAndInfo(data.busRoutes);
+        })
+        .catch(error => {
+            document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.';
+            startBtn.disabled = false; // 오류 발생 시 버튼 다시 활성화
+            console.error('Error:', error);
+        });
+};
 function formatMinutesToTime(totalMinutes) {
     if (typeof totalMinutes !== 'number' || isNaN(totalMinutes)) return 'N/A';
     const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
