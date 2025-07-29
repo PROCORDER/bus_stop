@@ -1,12 +1,22 @@
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 20px; box-sizing: border-box; }
 h1 { text-align: center; }
 #final-controls { text-align: center; margin-bottom: 20px; }
-#finalize-all-btn { padding: 10px 20px; font-size: 1.2em; font-weight: bold; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; display: none; }
-#finalize-all-btn:hover { background-color: #0056b3; }
+#final-controls button {
+    padding: 8px 15px;
+    font-size: 1em;
+    margin: 0 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: #f0f0f0;
+}
+#finalize-all-btn { display: none; background-color: #007bff; color: white; }
 #finalize-all-btn:disabled { background-color: #cccccc; }
+
 #map-container { display: flex; gap: 20px; height: 85vh; }
 #map { width: 70%; height: 100%; border: 1px solid #ccc; }
 #info-panel { width: 30%; height: 100%; overflow-y: auto; border: 1px solid #ddd; padding: 10px; box-sizing: border-box; }
+
 .route-info { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px; transition: background-color 0.3s; }
 .route-info.editing { background-color: #fffbe6; box-shadow: 0 0 10px rgba(255, 204, 0, 0.5); }
 .route-info .route-header.locked { text-decoration: underline; text-decoration-color: #28a745; }
@@ -20,6 +30,35 @@ h1 { text-align: center; }
 .stop-list .delete-btn { background: #ff4d4d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 2px 6px; margin-left: 5px;}
 .lock-container { display: inline-flex; align-items: center; font-size: 0.8em; margin-left: auto; padding-left: 10px; }
 .lock-container input { margin-right: 4px; transform: scale(1.2); }
+
 .custom-marker { background-color: #007BFF; color: white; font-weight: bold; font-size: 14px; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.4); cursor: pointer; }
+
 #add-stop-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1000; display: none; }
 #modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; display: none; }
+
+/* [추가] 그리기 및 폴리곤 관련 스타일 */
+.polygon-info { padding-bottom: 15px; }
+.polygon-info h3 { font-weight: bold; margin-bottom: 5px; }
+#polygon-stops-list { list-style-type: disc; padding-left: 20px; font-size: 0.9em; max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; }
+.drawing-controls { padding-top: 15px; margin-top: 15px; border-top: 2px solid #6f42c1; }
+.drawing-controls h3 { font-size: 1.2em; margin-bottom: 10px; }
+#get-drawing-data-btn { width: 100%; background-color: #6f42c1; color: white; margin-bottom: 10px; }
+#get-drawing-data-btn:hover { background-color: #5a32a3; }
+.result-box { margin-top: 10px; }
+.result-box h4 { font-size: 1em; margin-bottom: 5px; }
+#result { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px; min-height: 100px; white-space: pre-wrap; word-wrap: break-word; font-size: 0.8em; color: #333; }
+.status-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.master-toggle {
+    display: flex;
+    align-items: center;
+    font-size: 0.9em;
+}
+
+.master-toggle input {
+    margin-right: 5px;
+}
