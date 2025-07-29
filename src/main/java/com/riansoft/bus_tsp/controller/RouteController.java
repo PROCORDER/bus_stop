@@ -1,28 +1,31 @@
 package com.riansoft.bus_tsp.controller;
 
-import com.riansoft.bus_tsp.dto.ModifiedRouteDto;
-import com.riansoft.bus_tsp.dto.RouteModificationRequestDto;
-import com.riansoft.bus_tsp.dto.RouteSolutionDto;
-import com.riansoft.bus_tsp.dto.ValidatedRouteDto;
+import com.riansoft.bus_tsp.dto.*;
 import com.riansoft.bus_tsp.service.RouteOptimizationService;
 import com.riansoft.bus_tsp.service.RouteValidationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.riansoft.bus_tsp.service.StopDataService;
 
+
+import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
+
 public class RouteController {
 
     private final RouteOptimizationService routeService;
     private final RouteValidationService validationService;
+    private final StopDataService stopDataService;
 
     @Autowired
-    public RouteController(RouteOptimizationService routeService, RouteValidationService validationService) {
+    public RouteController(RouteOptimizationService routeService, RouteValidationService validationService,StopDataService stopDataService) {
         this.routeService = routeService;
         this.validationService = validationService;
+        this.stopDataService = stopDataService;
     }
 
     /**
@@ -71,5 +74,12 @@ public class RouteController {
             return ResponseEntity.internalServerError().body(null);
         }
         return ResponseEntity.ok(newSolution);
+    }
+
+    @GetMapping("/all-stops")
+    public ResponseEntity<List<StopDto>> getAllStops() {
+        System.out.printf("연결이 들어왔습니다.");
+        List<StopDto> allStops = stopDataService.getAllStopsAsDto();
+        return ResponseEntity.ok(allStops);
     }
 }
