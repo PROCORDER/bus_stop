@@ -11,6 +11,95 @@ let lockedRoutes = new Map();
 
 const finalizeAllBtn = document.getElementById('finalize-all-btn');
 
+window.onload = function() {
+    // 페이지가 로딩되면 모든 정류장 위치를 불러와 지도에 표시
+    fetchAllStopsAndDisplay();
+
+    // [기존] 계산 시작 버튼 관련 로직은 그대로 둡니다.
+    const startBtn = document.getElementById('start-optimization-btn');
+startBtn.onclick = function() {
+    // UI를 '계산 중' 상태로 변경하고 버튼을 비활성화합니다.
+    document.getElementById('status').innerText = '경로 계산 계산 중';
+    startBtn.disabled = true;
+
+    fetch('/api/optimize-route')
+        .then(response => {
+            if (!response.ok) throw new Error('서버 응답 오류: ' + response.status);
+            return response.json();
+        })
+        .then(data => {
+            if (!data || !data.busRoutes || data.busRoutes.length === 0) {
+                document.getElementById('status').innerText = '오류: 서버에서 해답을 찾지 못했습니다.';
+                startBtn.disabled = false; // 실패 시 버튼 다시 활성화
+                return;
+            }
+
+            // 계산 성공 시, 시작 버튼은 숨깁니다.
+            startBtn.style.display = 'none';
+
+            document.getElementById('status').innerHTML = `<h3>총 운행 정보</h3><p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p><hr>`;
+            drawRoutesAndInfo(data.busRoutes);
+        })
+        .catch(error => {
+            document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.';
+            startBtn.disabled = false; // 오류 발생 시 버튼 다시 활성화
+            console.error('Error:', error);
+        });
+};
+};
+function fetchAllStopsAndDisplay() {
+    fetch('/api/all-stops')
+        .then(response => {
+            if (!response.ok) throw new Error('모든 정류장 정보 로딩 실패');
+            return response.json();
+        })
+        .then(stops => {
+            console.log(stops.length + "개의 정류장 정보를 불러왔습니다.");
+            const bounds = new kakao.maps.LatLngBounds(); // 모든 마커가 보이도록 지도를 조정하기 위함
+
+            stops.forEach(stop => {
+                const position = new kakao.maps.LatLng(stop.lat, stop.lon);
+
+                // 마커를 생성합니다. 차고지와 일반 정류장을 구분할 수 있습니다.
+                const isDepot = stop.id.startsWith("DEPOT");
+                const markerImageSrc = isDepot ?
+                    'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png' : // 차고지 마커
+                    'https://t1.daumcdn.net/mapjsapi/images/marker.png'; // 일반 정류장 마커
+                const imageSize = isDepot ? new kakao.maps.Size(33, 36) : new kakao.maps.Size(24, 35);
+                const markerImage = new kakao.maps.MarkerImage(markerImageSrc, imageSize);
+
+                const marker = new kakao.maps.Marker({
+                    map: map,
+                    position: position,
+                    title: stop.name,
+                    image: markerImage
+                });
+
+                // 마커를 클릭했을 때 인포윈도우를 표시합니다.
+                const infowindow = new kakao.maps.InfoWindow({
+                    content: `<div style="padding:5px;font-size:12px;">${stop.name}</div>`,
+                    removable: true
+                });
+
+                kakao.maps.event.addListener(marker, 'click', function() {
+                    infowindow.open(map, marker);
+                });
+
+                // 전역 배열에 추가하여 나중에 한 번에 지울 수 있게 합니다.
+                mapOverlays.push(marker);
+                bounds.extend(position); // bounds 객체에 현재 마커의 위치를 추가
+            });
+
+            // 모든 마커를 포함하도록 지도의 범위를 조정합니다.
+            if (stops.length > 0) {
+                map.setBounds(bounds);
+            }
+        })
+        .catch(error => {
+            console.error("정류장 표시 중 오류:", error);
+        });
+}
+
 finalizeAllBtn.onclick = function() {
     if (lockedRoutes.size === 0) { alert('고정된 경로가 없습니다.'); return; }
     const payload = { modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops })) };
@@ -52,35 +141,7 @@ window.onload = function() {
 };*/
 const startBtn = document.getElementById('start-optimization-btn');
 
-startBtn.onclick = function() {
-    // UI를 '계산 중' 상태로 변경하고 버튼을 비활성화합니다.
-    document.getElementById('status').innerText = '경로 계산 계산 중';
-    startBtn.disabled = true;
 
-    fetch('/api/optimize-route')
-        .then(response => {
-            if (!response.ok) throw new Error('서버 응답 오류: ' + response.status);
-            return response.json();
-        })
-        .then(data => {
-            if (!data || !data.busRoutes || data.busRoutes.length === 0) {
-                document.getElementById('status').innerText = '오류: 서버에서 해답을 찾지 못했습니다.';
-                startBtn.disabled = false; // 실패 시 버튼 다시 활성화
-                return;
-            }
-
-            // 계산 성공 시, 시작 버튼은 숨깁니다.
-            startBtn.style.display = 'none';
-
-            document.getElementById('status').innerHTML = `<h3>총 운행 정보</h3><p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p><hr>`;
-            drawRoutesAndInfo(data.busRoutes);
-        })
-        .catch(error => {
-            document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.';
-            startBtn.disabled = false; // 오류 발생 시 버튼 다시 활성화
-            console.error('Error:', error);
-        });
-};
 function formatMinutesToTime(totalMinutes) {
     if (typeof totalMinutes !== 'number' || isNaN(totalMinutes)) return 'N/A';
     const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
@@ -305,7 +366,7 @@ busRoutes.forEach(busRoute => {
                 const circle = new kakao.maps.Circle({ center: latlng, radius: 50, fillColor: routeColor, fillOpacity: 0.8, strokeOpacity: 0 });
                 circle.setMap(map);
                 mapOverlays.push(circle);
-                markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/mapjsapi/images/dot.png', new kakao.maps.Size(10, 10), { offset: new kakao.maps.Point(5, 5) });
+
             } else if (isFinalDepot) {
                  markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', new kakao.maps.Size(33, 36), { offset: new kakao.maps.Point(16, 34) });
             }
