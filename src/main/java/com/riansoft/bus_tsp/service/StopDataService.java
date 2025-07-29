@@ -1,5 +1,6 @@
 package com.riansoft.bus_tsp.service;
 
+import com.riansoft.bus_tsp.dto.StopDto;
 import com.riansoft.bus_tsp.model.PhysicalStop;
 import com.riansoft.bus_tsp.model.VirtualStop;
 import org.springframework.core.io.ClassPathResource;
@@ -11,9 +12,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors; // 이 import 구문이 필요합니다.
+import java.util.stream.Stream;
 
 @Service
 public class StopDataService {
+
+
 
 
     public List<VirtualStop> getVirtualStops(int vehicleCapacity) {
@@ -94,5 +99,21 @@ public class StopDataService {
         List<PhysicalStop> stops = new ArrayList<>();
         stops.add(new PhysicalStop("DEPOT_YJ", "쿠팡 광주 3센터", 0, 37.347, 127.1965));
         return stops;
+    }
+    // StopDataService.java 에 아래 메서드를 추가하세요.
+
+    /**
+     * 모든 물리적 정류장(차고지 포함) 목록을 DTO 리스트로 변환하여 반환합니다.
+     * 지도에 초기 정류장들을 표시하기 위해 사용됩니다.
+     */
+    public List<StopDto> getAllStopsAsDto() {
+        System.out.println("[DATA LOG] 모든 정류장 정보 DTO 변환을 시작합니다.");
+        List<PhysicalStop> physicalStops = createPhysicalStopsFromCsv();
+        System.out.println(physicalStops);
+
+        // PhysicalStop 목록을 StopDto 목록으로 변환합니다.
+        return physicalStops.stream()
+                .map(pStop -> new StopDto(pStop.id, pStop.name, pStop.demand, pStop.lat, pStop.lon))
+                .collect(Collectors.toList());
     }
 }
