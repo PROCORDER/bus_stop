@@ -49,7 +49,7 @@ public class RouteOptimizationService {
         }
     }
 
-    public RouteSolutionDto findOptimalRoutes() {
+    public RouteSolutionDto findOptimalRoutes(long timeLimit, int capacity, long serviceTime, String dbName) {
         System.out.println("\n========= [1/5] 최초 최적 경로 계산 시작 ==========");
         List<VirtualStop> virtualStops = stopDataService.getVirtualStops(VEHICLE_CAPACITY);
         DataModel data = createDataModel(virtualStops);
@@ -59,11 +59,11 @@ public class RouteOptimizationService {
     /**
      * 고정된 제약조건으로 경로를 재계산합니다.
      */
-    public RouteSolutionDto reOptimizeWithConstraints(RouteModificationRequestDto request) {
+    public RouteSolutionDto reOptimizeWithConstraints(RouteModificationRequestDto request, long timeLimit, int capacity, long serviceTime, String dbName) {
         System.out.println("\n========= [RE-OPTIMIZE] 재계산 시작 ==========");
         // 1. 데이터 준비 및 분리
         List<ModifiedRouteDto> lockedRoutesRequest = request.getModifications();
-        List<VirtualStop> allVirtualStops = stopDataService.getVirtualStops(VEHICLE_CAPACITY);
+        List<VirtualStop> allVirtualStops = stopDataService.getVirtualStops(capacity, dbName);
 
         Set<String> lockedStopIds = new HashSet<>();
         for (ModifiedRouteDto lockedRoute : lockedRoutesRequest) {
@@ -71,13 +71,20 @@ public class RouteOptimizationService {
         }
 
         List<VirtualStop> remainingStops = allVirtualStops.stream()
-                .filter(stop -> stop.originalId.equals("DEPOT_YJ") || !lockedStopIds.contains(stop.originalId))
+                .filter(stop -> stop.originalId.equals("DEPOT_0") || !lockedStopIds.contains(stop.originalId))
                 .collect(Collectors.toList());
-
+        System.out.println("--- 디버깅 로그 ---");
+        System.out.println("전체 정류장 수: " + allVirtualStops.size());
+        System.out.println("고정된 경유지 ID 목록: " + lockedStopIds);
+        System.out.println("재계산 대상 정류장 수: " + remainingStops.size());
+        if (!remainingStops.isEmpty()) {
+            System.out.println("재계산 목록의 첫 번째 정류장(차고지여야 함): " + remainingStops.get(0).name);
+        }
+        System.out.println("--------------------");
         // 2. 고정 경로 처리 -> BusRouteDto 리스트로 변환
         List<BusRouteDto> finalLockedBusRoutes = new ArrayList<>();
         for (ModifiedRouteDto lockedRoute : lockedRoutesRequest) {
-            ValidatedRouteDto validated = validationService.validateAndCalculate(lockedRoute);
+            ValidatedRouteDto validated = validationService.validateAndCalculate(lockedRoute,capacity,dbName);
             List<StopDto> routeStops = lockedRoute.getNewRoute();
 
             List<List<LatLngDto>> detailedPath = new ArrayList<>();
@@ -100,15 +107,15 @@ public class RouteOptimizationService {
         List<BusRouteDto> newlyOptimizedBusRoutes = new ArrayList<>();
         if (remainingStops.size() > 1) { // 차고지 외에 남은 정류장이 있을 경우
             System.out.println("[RE-OPTIMIZE] 남은 정류장 " + (remainingStops.size() -1) + "개에 대해 재최적화 실행...");
-            DataModel remainingData = createDataModel(remainingStops);
-            RouteSolutionDto newlyOptimizedSolution = runSolver(remainingData);
+            DataModel remainingData = createDataModel(remainingStops, capacity);
+            RouteSolutionDto newlyOptimizedSolution = runSolver(remainingData, timeLimit, serviceTime);
             if (newlyOptimizedSolution != null) {
                 newlyOptimizedBusRoutes = newlyOptimizedSolution.getBusRoutes();
             }
         }
 
         // 4. 최종 포맷팅 요청 및 반환
-        return solutionFormatterService.formatMergedSolution(finalLockedBusRoutes, newlyOptimizedBusRoutes);
+        return solutionFormatterService.formatMergedSolution(finalLockedBusRoutes, newlyOptimizedBusRoutes,capacity,dbName);
     }
 
     /**
