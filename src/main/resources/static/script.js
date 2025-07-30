@@ -205,30 +205,74 @@
              }
  }
 
- function fetchAllStopsAndDisplay() {
-     fetch('/api/all-stops')
-         .then(response => response.json())
-         .then(stops => {
-             console.log(stops.length + "개의 정류장 정보를 불러왔습니다.");
-             const bounds = new kakao.maps.LatLngBounds();
-             stops.forEach(stop => {
-                 const position = new kakao.maps.LatLng(stop.lat, stop.lon);
-                 const isDepot = stop.id.startsWith("DEPOT");
-                 const markerImageSrc = isDepot ? 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png' : 'https://t1.daumcdn.net/mapjsapi/images/marker.png';
-                 const imageSize = isDepot ? new kakao.maps.Size(33, 36) : new kakao.maps.Size(24, 35);
-                 const markerImage = new kakao.maps.MarkerImage(markerImageSrc, imageSize);
-                 const marker = new kakao.maps.Marker({ map: map, position: position, title: stop.name, image: markerImage });
-                 const infowindow = new kakao.maps.InfoWindow({ content: `<div style="padding:5px;font-size:12px;">${stop.name}</div>`, removable: true });
-                 kakao.maps.event.addListener(marker, 'click', function() { infowindow.open(map, marker); });
-                 mapOverlays.push(marker);
-                 bounds.extend(position);
-             });
-             if (stops.length > 0) {
-                 map.setBounds(bounds);
-             }
-         })
-         .catch(error => console.error("정류장 표시 중 오류:", error));
- }
+function fetchAllStopsAndDisplay() {
+    // Promise를 반환하여 비동기 작업의 완료 시점을 알려줍니다.
+    return new Promise((resolve, reject) => {
+        // 1. 사용자가 선택한 DB 파일명을 가져옵니다.
+        const selectedDbName = document.getElementById('db-select').value;
+        if (!selectedDbName) {
+            alert('데이터베이스를 선택해주세요.');
+            reject(new Error("DB not selected"));
+            return;
+        }
+
+        console.log(`'${selectedDbName}' 데이터 로딩을 시작합니다...`);
+        // 마커를 새로 그리기 전에 이전 마커들을 모두 지웁니다.
+        clearMap();
+
+        // 2. fetch 요청 URL에 쿼리 파라미터로 dbName을 추가합니다.
+        fetch(`/api/all-stops?dbName=${selectedDbName}`)
+            .then(response => {
+                if (!response.ok) throw new Error('모든 정류장 정보 로딩 실패');
+                return response.json();
+            })
+            .then(stops => {
+                console.log(stops.length + "개의 정류장 정보를 불러왔습니다.");
+                const bounds = new kakao.maps.LatLngBounds();
+
+                stops.forEach(stop => {
+                    const position = new kakao.maps.LatLng(stop.lat, stop.lon);
+                    const isDepot = stop.id.startsWith("DEPOT");
+                    const markerImageSrc = isDepot ?
+                        'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png' :
+                        'https://t1.daumcdn.net/mapjsapi/images/marker.png';
+                    const imageSize = isDepot ? new kakao.maps.Size(33, 36) : new kakao.maps.Size(24, 35);
+                    const markerImage = new kakao.maps.MarkerImage(markerImageSrc, imageSize);
+
+                    const marker = new kakao.maps.Marker({
+                        map: map,
+                        position: position,
+                        title: stop.name,
+                        image: markerImage
+                    });
+
+                    const infowindow = new kakao.maps.InfoWindow({
+                        content: `<div style="padding:5px;font-size:12px;">${stop.name}</div>`,
+                        removable: true
+                    });
+
+                    kakao.maps.event.addListener(marker, 'click', function() {
+                        infowindow.open(map, marker);
+                    });
+
+                    mapOverlays.push(marker);
+                    bounds.extend(position);
+                });
+
+                if (stops.length > 0) {
+                    map.setBounds(bounds);
+                }
+
+                // 3. 모든 작업이 성공적으로 끝나면 resolve()를 호출하여 성공을 알립니다.
+                resolve();
+            })
+            .catch(error => {
+                console.error("정류장 표시 중 오류:", error);
+                // 4. 작업 중 오류가 발생하면 reject()를 호출하여 실패를 알립니다.
+                reject(error);
+            });
+    });
+}
 
  function initDrawingManager() {
      if (!map) { console.error("지도 객체가 없습니다."); return; }
