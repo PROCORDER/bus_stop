@@ -111,7 +111,7 @@ public class SolutionFormatterService {
     /**
      * 고정 경로와 신규 경로를 병합하고, 최종 포맷팅하여 반환합니다.
      */
-    public RouteSolutionDto formatMergedSolution(List<BusRouteDto> lockedRoutes, List<BusRouteDto> newlyOptimizedRoutes) {
+    public RouteSolutionDto formatMergedSolution(List<BusRouteDto> lockedRoutes, List<BusRouteDto> newlyOptimizedRoutes, int capacity, String dbName) {
         List<BusRouteDto> finalBusRoutes = new ArrayList<>();
         finalBusRoutes.addAll(lockedRoutes);
         finalBusRoutes.addAll(newlyOptimizedRoutes);
@@ -119,7 +119,7 @@ public class SolutionFormatterService {
         List<String> colors = generateDistinctColors(finalBusRoutes.size());
         final long finalArrivalTimeTarget = 9 * 60;
 
-        List<VirtualStop> allStops = stopDataService.getVirtualStops(RouteOptimizationService.VEHICLE_CAPACITY);
+        List<VirtualStop> allStops = stopDataService.getVirtualStops(capacity,dbName);
 
         for (int i = 0; i < finalBusRoutes.size(); i++) {
             BusRouteDto route = finalBusRoutes.get(i);

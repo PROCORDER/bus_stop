@@ -60,3 +60,26 @@ h1 { text-align: center; }
 .master-toggle input {
     margin-right: 5px;
 }
+.parameter-controls {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+.parameter-controls div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.parameter-controls label {
+    font-size: 0.9em;
+    margin-bottom: 5px;
+}
+.parameter-controls input, .parameter-controls select {
+    width: 120px;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+}

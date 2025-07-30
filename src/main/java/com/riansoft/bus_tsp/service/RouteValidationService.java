@@ -24,7 +24,7 @@ public class RouteValidationService {
         this.kakaoApiService = kakaoApiService;
     }
 
-    public ValidatedRouteDto validateAndCalculate(ModifiedRouteDto modifiedRoute) {
+    public ValidatedRouteDto validateAndCalculate(ModifiedRouteDto modifiedRoute, int capacity, String dbName) {
         List<StopDto> newRouteStops = modifiedRoute.getNewRoute();
         ValidatedRouteDto result = new ValidatedRouteDto();
         result.setBusId(modifiedRoute.getBusId());
@@ -40,7 +40,7 @@ public class RouteValidationService {
 
             cumulativeLoad += stop.getDemand();
             finalLoad += stop.getDemand();
-            if (cumulativeLoad > RouteOptimizationService.VEHICLE_CAPACITY) {
+            if (cumulativeLoad > capacity) {
                 capacityOk = false;
             }
         }
@@ -51,7 +51,7 @@ public class RouteValidationService {
         // (주의: 이 로직은 API를 매번 호출하므로, 실제 운영 환경에서는 캐싱된 timeMatrix를 활용하는 것이 효율적입니다)
         long totalTime = 0;
         // 전체 정류장 목록은 한 번만 불러옵니다.
-        List<VirtualStop> allStops = stopDataService.getVirtualStops(RouteOptimizationService.VEHICLE_CAPACITY);
+        List<VirtualStop> allStops = stopDataService.getVirtualStops(capacity,dbName);
         VirtualStop depot = allStops.get(0); // 차고지는 항상 0번
 
         if (!newRouteStops.isEmpty()) {
@@ -78,7 +78,7 @@ public class RouteValidationService {
         }
         result.setCalculatedRouteTime(totalTime);
 
-        result.setValidationMessage(capacityOk ? "성공" : "실패: 최대 탑승 정원(" + RouteOptimizationService.VEHICLE_CAPACITY + "명)을 초과합니다.");
+        result.setValidationMessage(capacityOk ? "성공" : "실패: 최대 탑승 정원(" + capacity + "명)을 초과합니다.");
 
         return result;
     }

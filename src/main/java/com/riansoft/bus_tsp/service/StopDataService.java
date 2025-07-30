@@ -21,9 +21,9 @@ public class StopDataService {
 
 
 
-    public List<VirtualStop> getVirtualStops(int vehicleCapacity) {
+    public List<VirtualStop> getVirtualStops(int vehicleCapacity, String dbName) {
         // 1. CSV 파일을 읽어 PhysicalStop 목록을 가져옵니다.
-        List<PhysicalStop> physicalStops = createPhysicalStopsFromCsv();
+        List<PhysicalStop> physicalStops = createPhysicalStopsFromCsv(dbName);
 
         // 2. 수요 분할 로직을 통해 가상 정류장 목록을 생성합니다.
         List<VirtualStop> virtualStops = new ArrayList<>();
@@ -47,32 +47,41 @@ public class StopDataService {
     }
 
 
-    private List<PhysicalStop> createPhysicalStopsFromCsv() {
+    private List<PhysicalStop> createPhysicalStopsFromCsv(String dbName) {
         List<PhysicalStop> stops = new ArrayList<>();
-        Random random = new Random();
 
-        // 차고지는 항상 고정으로 먼저 추가합니다.
-        stops.add(new PhysicalStop("DEPOT_YJ", "쿠팡 광주 3센터", 0, 37.347, 127.1965));
-
-        // resources/location.csv 파일을 읽어옵니다.
-        try (InputStream inputStream = new ClassPathResource("location2.csv").getInputStream();
+        // resources 폴더에서 dbName에 해당하는 파일을 읽어옵니다.
+        try (InputStream inputStream = new ClassPathResource(dbName).getInputStream();
              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
 
+            // 1. CSV의 첫 줄을 읽어 도착지(차고지)로 설정합니다.
+            String depotLine = reader.readLine();
+            if (depotLine != null && !depotLine.trim().isEmpty()) {
+                String[] parts = depotLine.trim().split(",");
+                if (parts.length >= 3) {
+                    String name = parts[0];
+                    double lat = Double.parseDouble(parts[1]);
+                    double lon = Double.parseDouble(parts[2]);
+                    // 차고지의 demand(수요)는 항상 0입니다. ID는 고유하게 설정합니다.
+                    stops.add(new PhysicalStop("DEPOT_0", name, 0, lat, lon));
+                }
+            }
+
+            // 2. 나머지 줄들을 읽어 경유지로 설정합니다.
             String line;
             int counter = 1;
             while ((line = reader.readLine()) != null) {
-                // 한 줄을 공백(탭 포함) 기준으로 자릅니다.
                 String[] parts = line.trim().split(",");
-                if (parts.length >= 3) {
+                // 이름, 위도, 경도, 탑승인원 형식에 맞게 수정 (4개 이상의 필드 확인)
+                if (parts.length >= 4) {
                     try {
                         String name = parts[0];
                         double lat = Double.parseDouble(parts[1]);
                         double lon = Double.parseDouble(parts[2]);
+                        // [변경] CSV 파일의 네 번째 값을 탑승인원(demand)으로 읽어옵니다.
+                        long demand = Math.round(Double.parseDouble(parts[3].trim()));
 
-                        // CSV에 ID가 없으므로, ST_1, ST_2 와 같이 고유 ID를 생성합니다.
                         String id = "ST_" + counter++;
-                        // 수요량은 5~25 사이의 랜덤 값으로 생성합니다.
-                        long demand = random.nextInt(5) + 2;
 
                         stops.add(new PhysicalStop(id, name, demand, lat, lon));
 
@@ -82,13 +91,14 @@ public class StopDataService {
                 }
             }
         } catch (Exception e) {
-            System.err.println("location2.csv 파일 읽기 중 오류 발생");
+            // [변경] 로그 메시지에 동적 파일명(dbName)을 사용합니다.
+            System.err.println(dbName + " 파일 읽기 중 오류 발생");
             e.printStackTrace();
-            // 파일 읽기 실패 시, 비상용 기본 데이터 반환 (선택 사항)
             return createDefaultStopsForEmergency();
         }
 
-        System.out.println("location2.csv 파일로부터 총 " + (stops.size() -1) + "개의 정류장을 성공적으로 로드했습니다.");
+        // [변경] 로그 메시지에 동적 파일명(dbName)을 사용합니다.
+        System.out.println(dbName + " 파일로부터 총 " + (stops.size() - 1) + "개의 정류장을 성공적으로 로드했습니다.");
         return stops;
     }
 
@@ -100,15 +110,14 @@ public class StopDataService {
         stops.add(new PhysicalStop("DEPOT_YJ", "쿠팡 광주 3센터", 0, 37.347, 127.1965));
         return stops;
     }
-    // StopDataService.java 에 아래 메서드를 추가하세요.
 
     /**
      * 모든 물리적 정류장(차고지 포함) 목록을 DTO 리스트로 변환하여 반환합니다.
      * 지도에 초기 정류장들을 표시하기 위해 사용됩니다.
      */
-    public List<StopDto> getAllStopsAsDto() {
+    public List<StopDto> getAllStopsAsDto(String dbName) {
         System.out.println("[DATA LOG] 모든 정류장 정보 DTO 변환을 시작합니다.");
-        List<PhysicalStop> physicalStops = createPhysicalStopsFromCsv();
+        List<PhysicalStop> physicalStops = createPhysicalStopsFromCsv(dbName);
         System.out.println(physicalStops);
 
         // PhysicalStop 목록을 StopDto 목록으로 변환합니다.

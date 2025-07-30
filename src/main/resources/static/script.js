@@ -9,10 +9,7 @@
 
  // --- 2. 지도 및 앱 초기화 ---
 
- /**
-  * 이 함수가 모든 초기화의 시작점입니다.
-  * 지도 객체를 생성하고, 그리기 도구를 생성하며, 초기 정류장 정보를 불러오고, 버튼 이벤트를 설정합니다.
-  */
+
  function initializeApp() {
      const mapContainer = document.getElementById('map');
      const mapOption = { center: new kakao.maps.LatLng(37.566826, 126.9786567), level: 8 };
@@ -28,24 +25,33 @@
      setupEventListeners();
  }
 
- /**
-  * 카카오맵 SDK 스크립트가 완전히 로드되면 initializeApp 함수를 호출합니다.
-  */
+
  kakao.maps.load(initializeApp);
 
 
- // --- 3. 핵심 로직 함수 ---
-
- /**
-  * 페이지의 모든 버튼에 대한 클릭 이벤트를 설정합니다.
-  */
  function setupEventListeners() {
+
+     const loadStopsBtn = document.getElementById('load-stops-btn');
+     loadStopsBtn.onclick = function() {
+         fetchAllStopsAndDisplay().then(() => {
+             document.getElementById('start-optimization-btn').disabled = false;
+             document.getElementById('start-drawing-btn').disabled = false;
+             document.getElementById('clear-polygons-btn').disabled = false;
+             document.getElementById('get-drawing-data-btn').disabled = false;
+         }).catch(() => {
+             alert("경유지 로딩에 실패했습니다.");
+         });
+     };
+
      const startBtn = document.getElementById('start-optimization-btn');
      startBtn.onclick = function() {
-         document.getElementById('status').innerText = '경로 계산 중...';
+         const timeLimit = document.getElementById('time-limit').value;
+         const capacity = document.getElementById('capacity').value;
+         const serviceTime = document.getElementById('service-time').value;
+         const dbName = document.getElementById('db-select').value;
+         document.getElementById('status-container').innerHTML = '<h2>경로 계산 중...</h2>';
          startBtn.disabled = true;
 
-         // 그리기 관련 버튼 숨기기
          const startDrawingBtn = document.getElementById('start-drawing-btn');
          const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
          const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
@@ -56,30 +62,103 @@
 
          clearMap();
 
-         fetch('/api/optimize-route')
+         fetch(`/api/optimize-route?timeLimit=${timeLimit}&capacity=${capacity}&serviceTime=${serviceTime}&dbName=${dbName}`)
              .then(response => response.json())
              .then(data => {
                  if (!data || !data.busRoutes || data.busRoutes.length === 0) {
-                     document.getElementById('status').innerText = '오류: 서버에서 해답을 찾지 못했습니다.';
+                     document.getElementById('status-container').innerHTML = '<h2>오류: 서버에서 해답을 찾지 못했습니다.</h2>';
                      startBtn.disabled = false;
                      fetchAllStopsAndDisplay();
                      return;
                  }
                  startBtn.style.display = 'none';
-
                  const statusContainer = document.getElementById('status-container');
                  statusContainer.innerHTML = `
                      <h3>총 운행 정보</h3>
                      <div class="status-line">
-                         <p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p>
+                         <p>필요 버스: ${data.usedBuses}대 </p>
                          <div class="master-toggle">
                              <input type="checkbox" id="toggle-all-routes" checked>
                              <label for="toggle-all-routes">모든 경로 표시</label>
                          </div>
                      </div>
-                     <hr>`;
-
+                     `;
                  drawRoutesAndInfo(data.busRoutes);
+                 document.getElementById('toggle-all-routes').onchange = function() {
+                     const isVisible = this.checked;
+                     document.querySelectorAll('.visibility-toggle-checkbox').forEach(checkbox => {
+                         if (checkbox.checked !== isVisible) {
+                             checkbox.checked = isVisible;
+                             checkbox.dispatchEvent(new Event('change'));
+                         }
+                     });
+                 };
+             })
+             .catch(error => {
+                 document.getElementById('status-container').innerHTML = '<h2>경로 계산 중 오류가 발생했습니다.</h2>';
+                 startBtn.disabled = false;
+                 fetchAllStopsAndDisplay();
+                 console.error('Error:', error);
+             })
+             .finally(() => {
+                 if(startDrawingBtn) startDrawingBtn.style.display = 'inline-block';
+                 if(cancelDrawingBtn) cancelDrawingBtn.style.display = 'none';
+                 if(clearPolygonsBtn) clearPolygonsBtn.style.display = 'inline-block';
+             });
+     };
+
+         const finalizeAllBtn = document.getElementById('finalize-all-btn');
+         finalizeAllBtn.onclick = function() {
+             if (lockedRoutes.size === 0) {
+                 alert('고정된 경로가 없습니다.');
+                 return;
+             }
+
+             // UI에서 현재 파라미터 값들을 다시 가져옵니다.
+             const timeLimit = document.getElementById('time-limit').value;
+             const capacity = document.getElementById('capacity').value;
+             const serviceTime = document.getElementById('service-time').value;
+             const dbName = document.getElementById('db-select').value;
+
+             const payload = {
+                 modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops })),
+                 params: {
+                     timeLimit: timeLimit,
+                     capacity: capacity,
+                     serviceTime: serviceTime,
+                     dbName: dbName
+                 }
+             };
+
+             document.getElementById('status-container').innerHTML = '<h2>재계산 중...</h2>';
+             finalizeAllBtn.disabled = true;
+             clearMap();
+
+             fetch('/api/re-optimize', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(payload),
+             })
+             .then(response => response.json())
+             .then(newSolution => {
+                 alert('재계산이 완료되었습니다. 새로운 경로를 표시합니다.');
+                 lockedRoutes.clear();
+                 finalizeAllBtn.style.display = 'none';
+                 finalizeAllBtn.disabled = false;
+
+                 const statusContainer = document.getElementById('status-container');
+                 statusContainer.innerHTML = `
+                     <h3>총 운행 정보</h3>
+                     <div class="status-line">
+                         <p>필요 버스: ${newSolution.usedBuses}대 | 전체 목표 비용: ${newSolution.totalObjectiveTime}</p>
+                         <div class="master-toggle">
+                             <input type="checkbox" id="toggle-all-routes" checked>
+                             <label for="toggle-all-routes">모든 경로 표시</label>
+                         </div>
+                     </div>
+                     `;
+
+                 drawRoutesAndInfo(newSolution.busRoutes);
 
                  document.getElementById('toggle-all-routes').onchange = function() {
                      const isVisible = this.checked;
@@ -92,169 +171,108 @@
                  };
              })
              .catch(error => {
-                 document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.';
-                 startBtn.disabled = false;
+                 alert('오류: ' + error.message);
+                 document.getElementById('status-container').innerHTML = '<h2>재계산 중 오류 발생</h2>';
+                 finalizeAllBtn.disabled = false;
                  fetchAllStopsAndDisplay();
-                 console.error('Error:', error);
-             })
-             .finally(() => {
-                 // 그리기 버튼들을 다시 표시
-                 if(startDrawingBtn) startDrawingBtn.style.display = 'inline-block';
-                 if(cancelDrawingBtn) cancelDrawingBtn.style.display = 'none';
-                 if(clearPolygonsBtn) clearPolygonsBtn.style.display = 'inline-block';
              });
-     };
-
-    finalizeAllBtn.onclick = function() {
-         if (lockedRoutes.size === 0) { alert('고정된 경로가 없습니다.'); return; }
-         const payload = { modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops })) };
-
-         // [수정] 존재하지 않는 'status' 대신 'status-container'의 내용을 변경합니다.
-         document.getElementById('status-container').innerHTML = '<h2>재계산 중...</h2>';
-
-         finalizeAllBtn.disabled = true;
-         clearMap();
-
-         fetch('/api/re-optimize', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify(payload),
-         })
-         .then(response => response.json())
-         .then(newSolution => {
-             alert('재계산이 완료되었습니다. 새로운 경로를 표시합니다.');
-             lockedRoutes.clear();
-             finalizeAllBtn.style.display = 'none';
-             finalizeAllBtn.disabled = false;
-
-             const statusContainer = document.getElementById('status-container');
-             statusContainer.innerHTML = `
-                 <h3>총 운행 정보</h3>
-                 <div class="status-line">
-                     <p>필요 버스: ${newSolution.usedBuses}대 | 전체 목표 비용: ${newSolution.totalObjectiveTime}</p>
-                     <div class="master-toggle">
-                         <input type="checkbox" id="toggle-all-routes" checked>
-                         <label for="toggle-all-routes">모든 경로 표시</label>
-                     </div>
-                 </div>
-                 <hr>`;
-
-             drawRoutesAndInfo(newSolution.busRoutes);
-
-             document.getElementById('toggle-all-routes').onchange = function() {
-                 const isVisible = this.checked;
-                 document.querySelectorAll('.visibility-toggle-checkbox').forEach(checkbox => {
-                     if (checkbox.checked !== isVisible) {
-                         checkbox.checked = isVisible;
-                         checkbox.dispatchEvent(new Event('change'));
+         };
+         const getDataBtn = document.getElementById('get-drawing-data-btn');
+             if (getDataBtn) {
+                 getDataBtn.onclick = function() {
+                     if (!drawingManager) {
+                         alert('그리기 도구가 아직 활성화되지 않았습니다.');
+                         return;
                      }
-                 });
-             };
-         })
-         .catch(error => {
-             alert('오류: ' + error.message);
-             // [수정] 여기도 'status-container'를 사용합니다.
-             document.getElementById('status-container').innerHTML = '<h2>재계산 중 오류 발생</h2>';
-             finalizeAllBtn.disabled = false;
-             fetchAllStopsAndDisplay();
-         });
-     };
-
-     const getDataBtn = document.getElementById('get-drawing-data-btn');
-     if (getDataBtn) {
-         getDataBtn.onclick = function() {
-             if (!drawingManager) { alert('그리기 도구가 아직 활성화되지 않았습니다.'); return; }
-             const data = drawingManager.getData();
-             const resultDiv = document.getElementById('result');
-             let resultText = '';
-             const polygons = data[kakao.maps.drawing.OverlayType.POLYGON];
-             if (polygons.length === 0) {
-                 resultText = '지도에 그려진 폴리곤이 없습니다.';
-             } else {
-                 polygons.forEach((polygon, index) => {
-                     resultText += `[ 폴리곤 #${index + 1} ]\n`;
-                     const points = polygon.points;
-                     points.forEach((point, i) => {
-                         resultText += `  - 꼭짓점 ${i + 1}: (위도: ${point.y}, 경도: ${point.x})\n`;
-                     });
-                     resultText += '\n';
-                 });
+                     const data = drawingManager.getData();
+                     const resultDiv = document.getElementById('result');
+                     let resultText = '';
+                     const polygons = data[kakao.maps.drawing.OverlayType.POLYGON];
+                     if (polygons.length === 0) {
+                         resultText = '지도에 그려진 폴리곤이 없습니다.';
+                     } else {
+                         polygons.forEach((polygon, index) => {
+                             resultText += `[ 폴리곤 #${index + 1} ]\n`;
+                             const points = polygon.points;
+                             points.forEach((point, i) => {
+                                 resultText += `  - 꼭짓점 ${i + 1}: (위도: ${point.y}, 경도: ${point.x})\n`;
+                             });
+                             resultText += '\n';
+                         });
+                     }
+                     resultDiv.textContent = resultText;
+                 };
              }
-             resultDiv.textContent = resultText;
-         };
-     }
-
-     const startDrawingBtn = document.getElementById('start-drawing-btn');
-     const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
-     const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
-
-     if (startDrawingBtn && cancelDrawingBtn) {
-         startDrawingBtn.onclick = function() {
-             if (drawingManager) {
-                 drawingManager.select(kakao.maps.drawing.OverlayType.POLYGON);
-                 startDrawingBtn.style.display = 'none';
-                 cancelDrawingBtn.style.display = 'inline-block';
-             }
-         };
-
-         cancelDrawingBtn.onclick = function() {
-             if (drawingManager) {
-                 drawingManager.cancel();
-                 startDrawingBtn.style.display = 'inline-block';
-                 cancelDrawingBtn.style.display = 'none';
-             }
-         };
-     }
-
-     if (clearPolygonsBtn) {
-         clearPolygonsBtn.onclick = function() {
-             if (drawingManager) {
-                 const data = drawingManager.getData();
-                 const polygons = data[kakao.maps.drawing.OverlayType.POLYGON] || [];
-                 [...polygons].forEach(p => drawingManager.remove(p));
-                 updateStopsInPolygonList();
-             }
-         };
-     }
-
-     document.getElementById('confirm-add-btn').onclick = function() {
-         const select = document.getElementById('insert-before-select');
-         const insertBeforeId = select.value;
-         const insertIndex = currentlyEditing.editedStops.findIndex(s => s.id === insertBeforeId);
-         if (insertIndex !== -1 && stopToAdd) {
-             currentlyEditing.editedStops.splice(insertIndex, 0, stopToAdd);
-             redrawStopList(currentlyEditing.routeDiv.querySelector('.stop-list'), currentlyEditing.editedStops, true);
-         }
-         hideAddStopModal();
-     };
-
-     document.getElementById('cancel-add-btn').onclick = hideAddStopModal;
  }
 
- function fetchAllStopsAndDisplay() {
-     fetch('/api/all-stops')
-         .then(response => response.json())
-         .then(stops => {
-             console.log(stops.length + "개의 정류장 정보를 불러왔습니다.");
-             const bounds = new kakao.maps.LatLngBounds();
-             stops.forEach(stop => {
-                 const position = new kakao.maps.LatLng(stop.lat, stop.lon);
-                 const isDepot = stop.id.startsWith("DEPOT");
-                 const markerImageSrc = isDepot ? 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png' : 'https://t1.daumcdn.net/mapjsapi/images/marker.png';
-                 const imageSize = isDepot ? new kakao.maps.Size(33, 36) : new kakao.maps.Size(24, 35);
-                 const markerImage = new kakao.maps.MarkerImage(markerImageSrc, imageSize);
-                 const marker = new kakao.maps.Marker({ map: map, position: position, title: stop.name, image: markerImage });
-                 const infowindow = new kakao.maps.InfoWindow({ content: `<div style="padding:5px;font-size:12px;">${stop.name}</div>`, removable: true });
-                 kakao.maps.event.addListener(marker, 'click', function() { infowindow.open(map, marker); });
-                 mapOverlays.push(marker);
-                 bounds.extend(position);
-             });
-             if (stops.length > 0) {
-                 map.setBounds(bounds);
-             }
-         })
-         .catch(error => console.error("정류장 표시 중 오류:", error));
- }
+function fetchAllStopsAndDisplay() {
+    // Promise를 반환하여 비동기 작업의 완료 시점을 알려줍니다.
+    return new Promise((resolve, reject) => {
+        // 1. 사용자가 선택한 DB 파일명을 가져옵니다.
+        const selectedDbName = document.getElementById('db-select').value;
+        if (!selectedDbName) {
+            alert('데이터베이스를 선택해주세요.');
+            reject(new Error("DB not selected"));
+            return;
+        }
+
+        console.log(`'${selectedDbName}' 데이터 로딩을 시작합니다...`);
+        // 마커를 새로 그리기 전에 이전 마커들을 모두 지웁니다.
+        clearMap();
+
+        // 2. fetch 요청 URL에 쿼리 파라미터로 dbName을 추가합니다.
+        fetch(`/api/all-stops?dbName=${selectedDbName}`)
+            .then(response => {
+                if (!response.ok) throw new Error('모든 정류장 정보 로딩 실패');
+                return response.json();
+            })
+            .then(stops => {
+                console.log(stops.length + "개의 정류장 정보를 불러왔습니다.");
+                const bounds = new kakao.maps.LatLngBounds();
+
+                stops.forEach(stop => {
+                    const position = new kakao.maps.LatLng(stop.lat, stop.lon);
+                    const isDepot = stop.id.startsWith("DEPOT");
+                    const markerImageSrc = isDepot ?
+                        'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png' :
+                        'https://t1.daumcdn.net/mapjsapi/images/marker.png';
+                    const imageSize = isDepot ? new kakao.maps.Size(33, 36) : new kakao.maps.Size(24, 35);
+                    const markerImage = new kakao.maps.MarkerImage(markerImageSrc, imageSize);
+
+                    const marker = new kakao.maps.Marker({
+                        map: map,
+                        position: position,
+                        title: stop.name,
+                        image: markerImage
+                    });
+
+                    const infowindow = new kakao.maps.InfoWindow({
+                        content: `<div style="padding:5px;font-size:12px;">${stop.name}</div>`,
+                        removable: true
+                    });
+
+                    kakao.maps.event.addListener(marker, 'click', function() {
+                        infowindow.open(map, marker);
+                    });
+
+                    mapOverlays.push(marker);
+                    bounds.extend(position);
+                });
+
+                if (stops.length > 0) {
+                    map.setBounds(bounds);
+                }
+
+                // 3. 모든 작업이 성공적으로 끝나면 resolve()를 호출하여 성공을 알립니다.
+                resolve();
+            })
+            .catch(error => {
+                console.error("정류장 표시 중 오류:", error);
+                // 4. 작업 중 오류가 발생하면 reject()를 호출하여 실패를 알립니다.
+                reject(error);
+            });
+    });
+}
 
  function initDrawingManager() {
      if (!map) { console.error("지도 객체가 없습니다."); return; }
