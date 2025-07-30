@@ -190,11 +190,11 @@ public class RouteOptimizationService {
         System.out.println("----------------------------------------------------------------------\n");
     }
 
-    private DataModel createDataModel(List<VirtualStop> virtualStops) {
+    private DataModel createDataModel(List<VirtualStop> virtualStops, int capacity) {
         long[][] timeMatrix = kakaoApiService.createTimeMatrixFromApi(virtualStops);
         long[] vehicleCapacities = new long[MAX_VEHICLES];
         for (int i=0; i < MAX_VEHICLES; i++) {
-            vehicleCapacities[i] = VEHICLE_CAPACITY;
+            vehicleCapacities[i] = capacity;
         }
         return new DataModel(timeMatrix, virtualStops, MAX_VEHICLES, vehicleCapacities);
     }
