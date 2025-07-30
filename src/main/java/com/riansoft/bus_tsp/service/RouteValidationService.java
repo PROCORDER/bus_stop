@@ -4,7 +4,7 @@ import com.riansoft.bus_tsp.dto.ModifiedRouteDto;
 import com.riansoft.bus_tsp.dto.StopDto;
 import com.riansoft.bus_tsp.dto.ValidatedRouteDto;
 import com.riansoft.bus_tsp.model.VirtualStop;
-import org.springframework.beans.factory.annotation.Autowired; // @Autowired를 사용한다면 추가
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -20,7 +20,6 @@ public class RouteValidationService {
     @Autowired
     public RouteValidationService(StopDataService stopDataService, KakaoApiService kakaoApiService) {
         this.stopDataService = stopDataService;
-        // [수정] kakaoApiService를 올바르게 할당합니다.
         this.kakaoApiService = kakaoApiService;
     }
 
@@ -48,7 +47,6 @@ public class RouteValidationService {
         result.setCapacityValid(capacityOk);
 
         // --- 2. 총 서비스 시간 계산 ---
-        // (주의: 이 로직은 API를 매번 호출하므로, 실제 운영 환경에서는 캐싱된 timeMatrix를 활용하는 것이 효율적입니다)
         long totalTime = 0;
         // 전체 정류장 목록은 한 번만 불러옵니다.
         List<VirtualStop> allStops = stopDataService.getVirtualStops(capacity,dbName);
@@ -85,7 +83,6 @@ public class RouteValidationService {
 
     // StopDto에 해당하는 VirtualStop을 전체 목록에서 찾는 헬퍼 메서드
     private VirtualStop findVirtualStop(List<VirtualStop> allStops, StopDto targetStop) {
-        // ID와 이름이 모두 일치하는 경우를 찾음 (이름이 분할되어 '-1', '-2' 등이 붙을 수 있으므로 startsWith 사용)
         return allStops.stream()
                 .filter(vs -> vs.originalId.equals(targetStop.getId()) && targetStop.getName().startsWith(vs.name.split("-")[0]))
                 .findFirst()
