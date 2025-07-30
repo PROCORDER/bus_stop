@@ -48,11 +48,26 @@ public class RouteController {
     }
 
     /**
-     * (유지) 프론트엔드에서 수정된 경로 목록을 받아 검증하고 '로그만 출력'합니다.
+     * 프론트엔드에서 수정된 경로 목록을 받아 검증하고 '로그만 출력'합니다.
      */
     @PostMapping("/apply-edits")
     public ResponseEntity<String> applyEdits(@RequestBody RouteModificationRequestDto request) {
         System.out.println("\n========= [CONTROLLER LOG] 수신된 경로 수정사항 검증 및 계산 시작 ==========");
+
+        // 요청으로부터 파라미터를 추출합니다.
+        Map<String, String> params = request.getParams();
+        int capacity = 45; // 기본값 설정
+        String dbName = "INC4.csv"; // 기본값 설정
+
+        if (params != null) {
+            if (params.containsKey("capacity")) {
+                capacity = Integer.parseInt(params.get("capacity"));
+            }
+            if (params.containsKey("dbName")) {
+                dbName = params.get("dbName"); // dbName 추출
+            }
+        }
+
         if (request == null || request.getModifications() == null || request.getModifications().isEmpty()) {
             System.out.println("[LOG] 수신된 수정사항이 없습니다.");
         } else {
