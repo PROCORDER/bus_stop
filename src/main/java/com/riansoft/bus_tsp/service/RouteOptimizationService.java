@@ -51,9 +51,9 @@ public class RouteOptimizationService {
 
     public RouteSolutionDto findOptimalRoutes(long timeLimit, int capacity, long serviceTime, String dbName) {
         System.out.println("\n========= [1/5] 최초 최적 경로 계산 시작 ==========");
-        List<VirtualStop> virtualStops = stopDataService.getVirtualStops(VEHICLE_CAPACITY);
-        DataModel data = createDataModel(virtualStops);
-        return runSolver(data);
+        List<VirtualStop> virtualStops = stopDataService.getVirtualStops(capacity, dbName);
+        DataModel data = createDataModel(virtualStops, capacity);
+        return runSolver(data, timeLimit, serviceTime);
     }
 
     /**
