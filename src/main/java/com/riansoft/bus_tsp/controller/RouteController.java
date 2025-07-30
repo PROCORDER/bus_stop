@@ -10,6 +10,7 @@ import com.riansoft.bus_tsp.service.StopDataService;
 
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,8 +33,14 @@ public class RouteController {
      * 최초의 최적 경로를 계산하여 반환합니다.
      */
     @GetMapping("/optimize-route")
-    public ResponseEntity<RouteSolutionDto> getOptimalRoutes() {
-        RouteSolutionDto solution = routeService.findOptimalRoutes();
+    public ResponseEntity<RouteSolutionDto> getOptimalRoutes(
+            // 쿼리 파라미터를 받도록 어노테이션 추가
+            @RequestParam long timeLimit,
+            @RequestParam int capacity,
+            @RequestParam long serviceTime,
+            @RequestParam String dbName) {
+        // 서비스 호출 시 파라미터 전달
+        RouteSolutionDto solution = routeService.findOptimalRoutes(timeLimit, capacity, serviceTime, dbName);
         if (solution == null) {
             return ResponseEntity.internalServerError().body(null);
         }
