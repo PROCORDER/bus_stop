@@ -76,7 +76,15 @@ public class RouteController {
      */
     @PostMapping("/re-optimize")
     public ResponseEntity<RouteSolutionDto> reOptimizeRoutes(@RequestBody RouteModificationRequestDto request) {
-        RouteSolutionDto newSolution = routeService.reOptimizeWithConstraints(request);
+        // DTO에서 파라미터 추출
+        Map<String, String> params = request.getParams();
+        long timeLimit = Long.parseLong(params.get("timeLimit"));
+        int capacity = Integer.parseInt(params.get("capacity"));
+        long serviceTime = Long.parseLong(params.get("serviceTime"));
+        String dbName = params.get("dbName");
+
+        // 서비스 호출 시 파라미터 전달
+        RouteSolutionDto newSolution = routeService.reOptimizeWithConstraints(request, timeLimit, capacity, serviceTime, dbName);
         if (newSolution == null) {
             return ResponseEntity.internalServerError().body(null);
         }
