@@ -9,10 +9,7 @@
 
  // --- 2. 지도 및 앱 초기화 ---
 
- /**
-  * 이 함수가 모든 초기화의 시작점입니다.
-  * 지도 객체를 생성하고, 그리기 도구를 생성하며, 초기 정류장 정보를 불러오고, 버튼 이벤트를 설정합니다.
-  */
+
  function initializeApp() {
      const mapContainer = document.getElementById('map');
      const mapOption = { center: new kakao.maps.LatLng(37.566826, 126.9786567), level: 8 };
@@ -28,17 +25,10 @@
      setupEventListeners();
  }
 
- /**
-  * 카카오맵 SDK 스크립트가 완전히 로드되면 initializeApp 함수를 호출합니다.
-  */
+
  kakao.maps.load(initializeApp);
 
 
- // --- 3. 핵심 로직 함수 ---
-
- /**
-  * 페이지의 모든 버튼에 대한 클릭 이벤트를 설정합니다.
-  */
  function setupEventListeners() {
 
      const loadStopsBtn = document.getElementById('load-stops-btn');
@@ -72,31 +62,28 @@
 
          clearMap();
 
-         fetch('/api/optimize-route')
+         fetch(`/api/optimize-route?timeLimit=${timeLimit}&capacity=${capacity}&serviceTime=${serviceTime}&dbName=${dbName}`)
              .then(response => response.json())
              .then(data => {
                  if (!data || !data.busRoutes || data.busRoutes.length === 0) {
-                     document.getElementById('status').innerText = '오류: 서버에서 해답을 찾지 못했습니다.';
+                     document.getElementById('status-container').innerHTML = '<h2>오류: 서버에서 해답을 찾지 못했습니다.</h2>';
                      startBtn.disabled = false;
                      fetchAllStopsAndDisplay();
                      return;
                  }
                  startBtn.style.display = 'none';
-
                  const statusContainer = document.getElementById('status-container');
                  statusContainer.innerHTML = `
                      <h3>총 운행 정보</h3>
                      <div class="status-line">
-                         <p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p>
+                         <p>필요 버스: ${data.usedBuses}대 </p>
                          <div class="master-toggle">
                              <input type="checkbox" id="toggle-all-routes" checked>
                              <label for="toggle-all-routes">모든 경로 표시</label>
                          </div>
                      </div>
-                     <hr>`;
-
+                     `;
                  drawRoutesAndInfo(data.busRoutes);
-
                  document.getElementById('toggle-all-routes').onchange = function() {
                      const isVisible = this.checked;
                      document.querySelectorAll('.visibility-toggle-checkbox').forEach(checkbox => {
@@ -108,13 +95,12 @@
                  };
              })
              .catch(error => {
-                 document.getElementById('status').innerText = '경로 계산 중 오류가 발생했습니다.';
+                 document.getElementById('status-container').innerHTML = '<h2>경로 계산 중 오류가 발생했습니다.</h2>';
                  startBtn.disabled = false;
                  fetchAllStopsAndDisplay();
                  console.error('Error:', error);
              })
              .finally(() => {
-                 // 그리기 버튼들을 다시 표시
                  if(startDrawingBtn) startDrawingBtn.style.display = 'inline-block';
                  if(cancelDrawingBtn) cancelDrawingBtn.style.display = 'none';
                  if(clearPolygonsBtn) clearPolygonsBtn.style.display = 'inline-block';
