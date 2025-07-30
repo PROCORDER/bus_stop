@@ -34,35 +34,11 @@
                 <option value="TW1.csv">TW1.csv</option>
             </select>
         </div>
-    <button id="start-optimization-btn">최적 경로 계산 시작</button>
-    <button id="finalize-all-btn">고정된 경로로 재계산 요청</button>
+    </div> <button id="start-optimization-btn" disabled>최적 경로 계산 시작</button>
+    <button id="finalize-all-btn" style="display: none;" disabled>고정된 경로로 재계산 요청</button>
 
-    <button id="start-drawing-btn">그리기</button>
+    <button id="start-drawing-btn" disabled>그리기</button>
     <button id="cancel-drawing-btn" style="display: none;">그리기 취소</button>
-</div>
-
-<div id="map-container">
-    <div id="map"></div>
-    <div id="info-panel">
-
-        <div id="polygon-stops-container" class="polygon-info">
-            <h3>영역 내 포함된 경유지</h3>
-            <ul id="polygon-stops-list">
-                <li>영역을 그려주세요.</li>
-            </ul>
-        </div>
-
-        <div id="status-container">
-            <h2 id="status">경로 계산을 시작해주세요.</h2>
-        </div>
-
-        <div class="drawing-controls">
-
-            <div class="result-box">
-            </div>
-        </div>
-
-    </div>
 </div>
 
 <div id="modal-backdrop"></div>
