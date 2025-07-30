@@ -146,17 +146,17 @@
                  finalizeAllBtn.style.display = 'none';
                  finalizeAllBtn.disabled = false;
 
-             const statusContainer = document.getElementById('status-container');
-             statusContainer.innerHTML = `
-                 <h3>총 운행 정보</h3>
-                 <div class="status-line">
-                     <p>필요 버스: ${newSolution.usedBuses}대 | 전체 목표 비용: ${newSolution.totalObjectiveTime}</p>
-                     <div class="master-toggle">
-                         <input type="checkbox" id="toggle-all-routes" checked>
-                         <label for="toggle-all-routes">모든 경로 표시</label>
+                 const statusContainer = document.getElementById('status-container');
+                 statusContainer.innerHTML = `
+                     <h3>총 운행 정보</h3>
+                     <div class="status-line">
+                         <p>필요 버스: ${newSolution.usedBuses}대 | 전체 목표 비용: ${newSolution.totalObjectiveTime}</p>
+                         <div class="master-toggle">
+                             <input type="checkbox" id="toggle-all-routes" checked>
+                             <label for="toggle-all-routes">모든 경로 표시</label>
+                         </div>
                      </div>
-                 </div>
-                 <hr>`;
+                     `;
 
                  drawRoutesAndInfo(newSolution.busRoutes);
 
