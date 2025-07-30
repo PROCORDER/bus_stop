@@ -55,10 +55,13 @@
 
      const startBtn = document.getElementById('start-optimization-btn');
      startBtn.onclick = function() {
-         document.getElementById('status').innerText = '경로 계산 중...';
+         const timeLimit = document.getElementById('time-limit').value;
+         const capacity = document.getElementById('capacity').value;
+         const serviceTime = document.getElementById('service-time').value;
+         const dbName = document.getElementById('db-select').value;
+         document.getElementById('status-container').innerHTML = '<h2>경로 계산 중...</h2>';
          startBtn.disabled = true;
 
-         // 그리기 관련 버튼 숨기기
          const startDrawingBtn = document.getElementById('start-drawing-btn');
          const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
          const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
