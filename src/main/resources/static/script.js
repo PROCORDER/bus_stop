@@ -107,27 +107,44 @@
              });
      };
 
-    finalizeAllBtn.onclick = function() {
-         if (lockedRoutes.size === 0) { alert('고정된 경로가 없습니다.'); return; }
-         const payload = { modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops })) };
+         const finalizeAllBtn = document.getElementById('finalize-all-btn');
+         finalizeAllBtn.onclick = function() {
+             if (lockedRoutes.size === 0) {
+                 alert('고정된 경로가 없습니다.');
+                 return;
+             }
 
-         // [수정] 존재하지 않는 'status' 대신 'status-container'의 내용을 변경합니다.
-         document.getElementById('status-container').innerHTML = '<h2>재계산 중...</h2>';
+             // UI에서 현재 파라미터 값들을 다시 가져옵니다.
+             const timeLimit = document.getElementById('time-limit').value;
+             const capacity = document.getElementById('capacity').value;
+             const serviceTime = document.getElementById('service-time').value;
+             const dbName = document.getElementById('db-select').value;
 
-         finalizeAllBtn.disabled = true;
-         clearMap();
+             const payload = {
+                 modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops })),
+                 params: {
+                     timeLimit: timeLimit,
+                     capacity: capacity,
+                     serviceTime: serviceTime,
+                     dbName: dbName
+                 }
+             };
 
-         fetch('/api/re-optimize', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify(payload),
-         })
-         .then(response => response.json())
-         .then(newSolution => {
-             alert('재계산이 완료되었습니다. 새로운 경로를 표시합니다.');
-             lockedRoutes.clear();
-             finalizeAllBtn.style.display = 'none';
-             finalizeAllBtn.disabled = false;
+             document.getElementById('status-container').innerHTML = '<h2>재계산 중...</h2>';
+             finalizeAllBtn.disabled = true;
+             clearMap();
+
+             fetch('/api/re-optimize', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(payload),
+             })
+             .then(response => response.json())
+             .then(newSolution => {
+                 alert('재계산이 완료되었습니다. 새로운 경로를 표시합니다.');
+                 lockedRoutes.clear();
+                 finalizeAllBtn.style.display = 'none';
+                 finalizeAllBtn.disabled = false;
 
              const statusContainer = document.getElementById('status-container');
              statusContainer.innerHTML = `
@@ -141,96 +158,51 @@
                  </div>
                  <hr>`;
 
-             drawRoutesAndInfo(newSolution.busRoutes);
+                 drawRoutesAndInfo(newSolution.busRoutes);
 
-             document.getElementById('toggle-all-routes').onchange = function() {
-                 const isVisible = this.checked;
-                 document.querySelectorAll('.visibility-toggle-checkbox').forEach(checkbox => {
-                     if (checkbox.checked !== isVisible) {
-                         checkbox.checked = isVisible;
-                         checkbox.dispatchEvent(new Event('change'));
-                     }
-                 });
-             };
-         })
-         .catch(error => {
-             alert('오류: ' + error.message);
-             // [수정] 여기도 'status-container'를 사용합니다.
-             document.getElementById('status-container').innerHTML = '<h2>재계산 중 오류 발생</h2>';
-             finalizeAllBtn.disabled = false;
-             fetchAllStopsAndDisplay();
-         });
-     };
-
-     const getDataBtn = document.getElementById('get-drawing-data-btn');
-     if (getDataBtn) {
-         getDataBtn.onclick = function() {
-             if (!drawingManager) { alert('그리기 도구가 아직 활성화되지 않았습니다.'); return; }
-             const data = drawingManager.getData();
-             const resultDiv = document.getElementById('result');
-             let resultText = '';
-             const polygons = data[kakao.maps.drawing.OverlayType.POLYGON];
-             if (polygons.length === 0) {
-                 resultText = '지도에 그려진 폴리곤이 없습니다.';
-             } else {
-                 polygons.forEach((polygon, index) => {
-                     resultText += `[ 폴리곤 #${index + 1} ]\n`;
-                     const points = polygon.points;
-                     points.forEach((point, i) => {
-                         resultText += `  - 꼭짓점 ${i + 1}: (위도: ${point.y}, 경도: ${point.x})\n`;
+                 document.getElementById('toggle-all-routes').onchange = function() {
+                     const isVisible = this.checked;
+                     document.querySelectorAll('.visibility-toggle-checkbox').forEach(checkbox => {
+                         if (checkbox.checked !== isVisible) {
+                             checkbox.checked = isVisible;
+                             checkbox.dispatchEvent(new Event('change'));
+                         }
                      });
-                     resultText += '\n';
-                 });
-             }
-             resultDiv.textContent = resultText;
+                 };
+             })
+             .catch(error => {
+                 alert('오류: ' + error.message);
+                 document.getElementById('status-container').innerHTML = '<h2>재계산 중 오류 발생</h2>';
+                 finalizeAllBtn.disabled = false;
+                 fetchAllStopsAndDisplay();
+             });
          };
-     }
-
-     const startDrawingBtn = document.getElementById('start-drawing-btn');
-     const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
-     const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
-
-     if (startDrawingBtn && cancelDrawingBtn) {
-         startDrawingBtn.onclick = function() {
-             if (drawingManager) {
-                 drawingManager.select(kakao.maps.drawing.OverlayType.POLYGON);
-                 startDrawingBtn.style.display = 'none';
-                 cancelDrawingBtn.style.display = 'inline-block';
+         const getDataBtn = document.getElementById('get-drawing-data-btn');
+             if (getDataBtn) {
+                 getDataBtn.onclick = function() {
+                     if (!drawingManager) {
+                         alert('그리기 도구가 아직 활성화되지 않았습니다.');
+                         return;
+                     }
+                     const data = drawingManager.getData();
+                     const resultDiv = document.getElementById('result');
+                     let resultText = '';
+                     const polygons = data[kakao.maps.drawing.OverlayType.POLYGON];
+                     if (polygons.length === 0) {
+                         resultText = '지도에 그려진 폴리곤이 없습니다.';
+                     } else {
+                         polygons.forEach((polygon, index) => {
+                             resultText += `[ 폴리곤 #${index + 1} ]\n`;
+                             const points = polygon.points;
+                             points.forEach((point, i) => {
+                                 resultText += `  - 꼭짓점 ${i + 1}: (위도: ${point.y}, 경도: ${point.x})\n`;
+                             });
+                             resultText += '\n';
+                         });
+                     }
+                     resultDiv.textContent = resultText;
+                 };
              }
-         };
-
-         cancelDrawingBtn.onclick = function() {
-             if (drawingManager) {
-                 drawingManager.cancel();
-                 startDrawingBtn.style.display = 'inline-block';
-                 cancelDrawingBtn.style.display = 'none';
-             }
-         };
-     }
-
-     if (clearPolygonsBtn) {
-         clearPolygonsBtn.onclick = function() {
-             if (drawingManager) {
-                 const data = drawingManager.getData();
-                 const polygons = data[kakao.maps.drawing.OverlayType.POLYGON] || [];
-                 [...polygons].forEach(p => drawingManager.remove(p));
-                 updateStopsInPolygonList();
-             }
-         };
-     }
-
-     document.getElementById('confirm-add-btn').onclick = function() {
-         const select = document.getElementById('insert-before-select');
-         const insertBeforeId = select.value;
-         const insertIndex = currentlyEditing.editedStops.findIndex(s => s.id === insertBeforeId);
-         if (insertIndex !== -1 && stopToAdd) {
-             currentlyEditing.editedStops.splice(insertIndex, 0, stopToAdd);
-             redrawStopList(currentlyEditing.routeDiv.querySelector('.stop-list'), currentlyEditing.editedStops, true);
-         }
-         hideAddStopModal();
-     };
-
-     document.getElementById('cancel-add-btn').onclick = hideAddStopModal;
  }
 
  function fetchAllStopsAndDisplay() {
