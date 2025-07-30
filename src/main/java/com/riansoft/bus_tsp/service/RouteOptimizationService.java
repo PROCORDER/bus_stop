@@ -171,14 +171,14 @@ public class RouteOptimizationService {
         }
     }
 
-    private void preCheckStops(DataModel data) {
+    private void preCheckStops(DataModel data, long serviceTime) {
         if(data.timeMatrix.length <= 1) return;
-        System.out.println("\n--- [사전 검사] 각 정류장의 최소 서비스 시간 확인 (제한: " + MAX_SERVICE_TIME + "분) ---");
+        System.out.println("\n--- [사전 검사] 각 정류장의 최소 서비스 시간 확인 (제한: " + serviceTime + "분) ---");
         boolean hasImpossibleStop = false;
         for (int i = 1; i < data.virtualStops.size(); i++) {
             VirtualStop stop = data.virtualStops.get(i);
             long minServiceTime = data.timeMatrix[i][data.depotIndex];
-            if (minServiceTime > MAX_SERVICE_TIME) {
+            if (minServiceTime > serviceTime) {
                 System.err.printf("  [WARNING] 정류장 '%s' (ID: %s)는 단독 운행만으로도 서비스 시간 제한을 초과합니다. (필요시간: %d분)%n",
                         stop.name, stop.originalId, minServiceTime);
                 hasImpossibleStop = true;
