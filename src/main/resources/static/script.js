@@ -1,4 +1,4 @@
-/// --- 1. 전역 변수 선언 ---
+
  let map;
  let drawingManager;
  let mapOverlays = [];
@@ -7,7 +7,7 @@
  let lockedRoutes = new Map();
  const finalizeAllBtn = document.getElementById('finalize-all-btn');
 
- // --- 2. 지도 및 앱 초기화 ---
+
 
 
  function initializeApp() {
@@ -39,7 +39,6 @@
              document.getElementById('clear-polygons-btn').disabled = false;
              document.getElementById('get-drawing-data-btn').disabled = false;
          }).catch(() => {
-             alert("경유지 로딩에 실패했습니다.");
          });
      };
 
@@ -333,7 +332,7 @@ function drawRoutesAndInfo(busRoutes) {
 
         const headerContent = document.createElement('div');
         headerContent.className = 'header-main-content';
-        headerContent.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)
+        headerContent.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)`;
         header.appendChild(headerContent);
 
         const buttonContainer = document.createElement('div');
