@@ -76,7 +76,6 @@ public class StopDataService {
                         String name = parts[0];
                         double lat = Double.parseDouble(parts[1]);
                         double lon = Double.parseDouble(parts[2]);
-                        // [변경] CSV 파일의 네 번째 값을 탑승인원(demand)으로 읽어옵니다.
                         long demand = Math.round(Double.parseDouble(parts[3].trim()));
 
                         String id = "ST_" + counter++;
@@ -89,7 +88,6 @@ public class StopDataService {
                 }
             }
         } catch (Exception e) {
-            // [변경] 로그 메시지에 동적 파일명(dbName)을 사용합니다.
             System.err.println(dbName + " 파일 읽기 중 오류 발생");
             e.printStackTrace();
             return createDefaultStopsForEmergency();
