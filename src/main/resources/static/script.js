@@ -5,6 +5,7 @@
  let currentlyEditing = { busId: null, routeDiv: null, originalStops: [], editedStops: [] };
  let stopToAdd = null;
  let lockedRoutes = new Map();
+ const finalizeAllBtn = document.getElementById('finalize-all-btn');
 
  // --- 2. 지도 및 앱 초기화 ---
 
@@ -43,12 +44,18 @@
      startBtn.onclick = function() {
          document.getElementById('status').innerText = '경로 계산 중...';
          startBtn.disabled = true;
+
+         // 그리기 관련 버튼 숨기기
+         const startDrawingBtn = document.getElementById('start-drawing-btn');
+         const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
+         const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
+         if (drawingManager) drawingManager.cancel();
+         if(startDrawingBtn) startDrawingBtn.style.display = 'none';
+         if(cancelDrawingBtn) cancelDrawingBtn.style.display = 'none';
+         if(clearPolygonsBtn) clearPolygonsBtn.style.display = 'none';
+
          clearMap();
-       // 혹시 그리고 있는 중이었다면 취소시킵니다.
-            if (drawingManager) {
-                drawingManager.cancel();
-            }
-        startDrawingBtn.style.display = 'none';
+
          fetch('/api/optimize-route')
              .then(response => response.json())
              .then(data => {
@@ -64,7 +71,7 @@
                  statusContainer.innerHTML = `
                      <h3>총 운행 정보</h3>
                      <div class="status-line">
-                         <p>필요 버스: ${data.usedBuses}대 </p>
+                         <p>필요 버스: ${data.usedBuses}대 | 전체 목표 비용: ${data.totalObjectiveTime}</p>
                          <div class="master-toggle">
                              <input type="checkbox" id="toggle-all-routes" checked>
                              <label for="toggle-all-routes">모든 경로 표시</label>
@@ -89,14 +96,22 @@
                  startBtn.disabled = false;
                  fetchAllStopsAndDisplay();
                  console.error('Error:', error);
+             })
+             .finally(() => {
+                 // 그리기 버튼들을 다시 표시
+                 if(startDrawingBtn) startDrawingBtn.style.display = 'inline-block';
+                 if(cancelDrawingBtn) cancelDrawingBtn.style.display = 'none';
+                 if(clearPolygonsBtn) clearPolygonsBtn.style.display = 'inline-block';
              });
      };
 
-     const finalizeAllBtn = document.getElementById('finalize-all-btn');
-     finalizeAllBtn.onclick = function() {
+    finalizeAllBtn.onclick = function() {
          if (lockedRoutes.size === 0) { alert('고정된 경로가 없습니다.'); return; }
          const payload = { modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops })) };
-         document.getElementById('status').innerText = '재계산 중...';
+
+         // [수정] 존재하지 않는 'status' 대신 'status-container'의 내용을 변경합니다.
+         document.getElementById('status-container').innerHTML = '<h2>재계산 중...</h2>';
+
          finalizeAllBtn.disabled = true;
          clearMap();
 
@@ -138,15 +153,40 @@
          })
          .catch(error => {
              alert('오류: ' + error.message);
-             document.getElementById('status').innerText = '재계산 중 오류 발생';
+             // [수정] 여기도 'status-container'를 사용합니다.
+             document.getElementById('status-container').innerHTML = '<h2>재계산 중 오류 발생</h2>';
              finalizeAllBtn.disabled = false;
              fetchAllStopsAndDisplay();
          });
      };
 
+     const getDataBtn = document.getElementById('get-drawing-data-btn');
+     if (getDataBtn) {
+         getDataBtn.onclick = function() {
+             if (!drawingManager) { alert('그리기 도구가 아직 활성화되지 않았습니다.'); return; }
+             const data = drawingManager.getData();
+             const resultDiv = document.getElementById('result');
+             let resultText = '';
+             const polygons = data[kakao.maps.drawing.OverlayType.POLYGON];
+             if (polygons.length === 0) {
+                 resultText = '지도에 그려진 폴리곤이 없습니다.';
+             } else {
+                 polygons.forEach((polygon, index) => {
+                     resultText += `[ 폴리곤 #${index + 1} ]\n`;
+                     const points = polygon.points;
+                     points.forEach((point, i) => {
+                         resultText += `  - 꼭짓점 ${i + 1}: (위도: ${point.y}, 경도: ${point.x})\n`;
+                     });
+                     resultText += '\n';
+                 });
+             }
+             resultDiv.textContent = resultText;
+         };
+     }
 
      const startDrawingBtn = document.getElementById('start-drawing-btn');
      const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
+     const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
 
      if (startDrawingBtn && cancelDrawingBtn) {
          startDrawingBtn.onclick = function() {
@@ -166,6 +206,17 @@
          };
      }
 
+     if (clearPolygonsBtn) {
+         clearPolygonsBtn.onclick = function() {
+             if (drawingManager) {
+                 const data = drawingManager.getData();
+                 const polygons = data[kakao.maps.drawing.OverlayType.POLYGON] || [];
+                 [...polygons].forEach(p => drawingManager.remove(p));
+                 updateStopsInPolygonList();
+             }
+         };
+     }
+
      document.getElementById('confirm-add-btn').onclick = function() {
          const select = document.getElementById('insert-before-select');
          const insertBeforeId = select.value;
@@ -179,7 +230,6 @@
 
      document.getElementById('cancel-add-btn').onclick = hideAddStopModal;
  }
-
 
  function fetchAllStopsAndDisplay() {
      fetch('/api/all-stops')
@@ -243,204 +293,211 @@
      });
  }
 
- function drawRoutesAndInfo(busRoutes) {
-     const bounds = new kakao.maps.LatLngBounds();
-     const infoPanel = document.getElementById('info-panel');
-     const statusContainer = document.getElementById('status-container');
+function drawRoutesAndInfo(busRoutes) {
+    const bounds = new kakao.maps.LatLngBounds();
+    const infoPanel = document.getElementById('info-panel');
+    const statusContainer = document.getElementById('status-container');
 
-     // Remove old route-info divs but keep the status container
-     infoPanel.querySelectorAll('.route-info').forEach(r => r.remove());
+    // Remove old route-info divs but keep the status container
+    infoPanel.querySelectorAll('.route-info').forEach(r => r.remove());
 
-     busRoutes.forEach((busRoute, routeIndex) => {
-         const routeColor = busRoute.color;
-         const fullRoute = busRoute.route;
-         if (fullRoute.length === 0) return;
+    busRoutes.forEach((busRoute, routeIndex) => {
+        const routeColor = busRoute.color;
+        const fullRoute = busRoute.route;
+        if (fullRoute.length === 0) return;
 
-         const routeDiv = document.createElement('div');
-         routeDiv.className = 'route-info';
-         const header = document.createElement('div');
-         header.className = 'route-header';
+        const routeDiv = document.createElement('div');
+        routeDiv.className = 'route-info';
+        const header = document.createElement('div');
+        header.className = 'route-header';
 
-         const departureTime = fullRoute.length > 1 ? (fullRoute[0].arrivalTime - (busRoute.routeTime - (fullRoute[fullRoute.length - 1].arrivalTime - fullRoute[0].arrivalTime))) : 0;
+        const departureTime = fullRoute.length > 1 ? (fullRoute[0].arrivalTime - (busRoute.routeTime - (fullRoute[fullRoute.length - 1].arrivalTime - fullRoute[0].arrivalTime))) : 0;
 
-         const headerContent = document.createElement('div');
-         headerContent.className = 'header-main-content';
-         headerContent.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)
-                             <div class="departure-time">예상 출발(차고지): ${formatMinutesToTime(departureTime)}</div>`;
-         header.appendChild(headerContent);
+        const headerContent = document.createElement('div');
+        headerContent.className = 'header-main-content';
+        headerContent.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)
+                            <div class="departure-time">예상 출발(차고지): ${formatMinutesToTime(departureTime)}</div>`;
+        header.appendChild(headerContent);
 
-         const buttonContainer = document.createElement('div');
-         buttonContainer.style.marginLeft = '10px';
-         const editButton = document.createElement('button');
-         editButton.innerText = '경로 수정';
-         editButton.style.fontSize = '0.8em';
-         buttonContainer.appendChild(editButton);
-         header.appendChild(buttonContainer);
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.marginLeft = '10px';
+        const editButton = document.createElement('button');
+        editButton.innerText = '경로 수정';
+        editButton.style.fontSize = '0.8em';
+        buttonContainer.appendChild(editButton);
+        header.appendChild(buttonContainer);
 
-         const visibilityContainer = document.createElement('div');
-         visibilityContainer.className = 'lock-container';
-         const visibilityCheckbox = document.createElement('input');
-         visibilityCheckbox.type = 'checkbox';
-         visibilityCheckbox.checked = true;
-         visibilityCheckbox.id = `visibility-bus-${busRoute.busId}`;
-         visibilityCheckbox.className = 'visibility-toggle-checkbox';
-         const visibilityLabel = document.createElement('label');
-         visibilityLabel.htmlFor = visibilityCheckbox.id;
-         visibilityLabel.innerText = '경로 표시';
-         visibilityLabel.style.marginRight = '10px';
+        const visibilityContainer = document.createElement('div');
+        visibilityContainer.className = 'lock-container';
+        const visibilityCheckbox = document.createElement('input');
+        visibilityCheckbox.type = 'checkbox';
+        visibilityCheckbox.checked = true;
+        visibilityCheckbox.id = `visibility-bus-${busRoute.busId}`;
+        visibilityCheckbox.className = 'visibility-toggle-checkbox';
+        const visibilityLabel = document.createElement('label');
+        visibilityLabel.htmlFor = visibilityCheckbox.id;
+        visibilityLabel.innerText = '경로 표시';
+        visibilityLabel.style.marginRight = '10px';
 
-         const routePolylines = []; // Will be populated later
+        const routePolylines = [];
 
-         visibilityCheckbox.onchange = function() {
-             const isVisible = this.checked;
-             routePolylines.forEach(polyline => {
-                 polyline.setMap(isVisible ? map : null);
-             });
-         };
-         visibilityContainer.append(visibilityCheckbox, visibilityLabel);
-         header.appendChild(visibilityContainer);
+        visibilityCheckbox.onchange = function() {
+            const isVisible = this.checked;
+            routePolylines.forEach(polyline => {
+                polyline.setMap(isVisible ? map : null);
+            });
+        };
+        visibilityContainer.append(visibilityCheckbox, visibilityLabel);
+        header.appendChild(visibilityContainer);
 
-         const lockContainer = document.createElement('div');
-         lockContainer.className = 'lock-container';
-         const lockCheckbox = document.createElement('input');
-         lockCheckbox.type = 'checkbox';
-         lockCheckbox.id = `lock-bus-${busRoute.busId}`;
-         const lockLabel = document.createElement('label');
-         lockLabel.htmlFor = lockCheckbox.id;
-         lockLabel.innerText = '경로 고정';
-         lockCheckbox.onchange = function() {
-             const routeToLock = lockedRoutes.get(busRoute.busId) || busRoute.route;
-             if (this.checked) {
-                 lockedRoutes.set(busRoute.busId, routeToLock);
-                 header.classList.add('locked');
-             } else {
-                 lockedRoutes.delete(busRoute.busId);
-                 header.classList.remove('locked');
-             }
-             finalizeAllBtn.style.display = lockedRoutes.size > 0 ? 'block' : 'none';
-         };
-         lockContainer.append(lockCheckbox, lockLabel);
-         header.appendChild(lockContainer);
-         routeDiv.appendChild(header);
+        const lockContainer = document.createElement('div');
+        lockContainer.className = 'lock-container';
+        const lockCheckbox = document.createElement('input');
+        lockCheckbox.type = 'checkbox';
+        lockCheckbox.id = `lock-bus-${busRoute.busId}`;
+        const lockLabel = document.createElement('label');
+        lockLabel.htmlFor = lockCheckbox.id;
+        lockLabel.innerText = '경로 고정';
 
-         const stopUl = document.createElement('ul');
-         stopUl.className = 'stop-list';
-         redrawStopList(stopUl, fullRoute, false);
-         routeDiv.appendChild(stopUl);
-         infoPanel.appendChild(routeDiv);
+        // --- [복구된 로직 1] 경로 고정 체크박스 이벤트 핸들러 ---
+        lockCheckbox.onchange = function() {
+            const routeToLock = lockedRoutes.get(busRoute.busId) || busRoute.route;
+            if (this.checked) {
+                lockedRoutes.set(busRoute.busId, routeToLock);
+                header.classList.add('locked');
+            } else {
+                lockedRoutes.delete(busRoute.busId);
+                header.classList.remove('locked');
+            }
+            finalizeAllBtn.style.display = lockedRoutes.size > 0 ? 'block' : 'none';
+        };
+        // ----------------------------------------------------
 
-         editButton.onclick = function(event) {
-             event.stopPropagation();
-             if (currentlyEditing.busId) { alert('다른 경로를 수정 중입니다. 먼저 완료하거나 취소해주세요.'); return; }
-             currentlyEditing = { busId: busRoute.busId, routeDiv, originalStops: [...fullRoute], editedStops: [...fullRoute] };
-             routeDiv.classList.add('editing');
-             lockCheckbox.disabled = true;
-             redrawStopList(stopUl, currentlyEditing.editedStops, true);
-             editButton.style.display = 'none';
-             const saveButton = document.createElement('button');
-             saveButton.innerText = '수정 완료';
-             saveButton.style.cssText = 'font-size: 0.8em; background-color: #28a745; color: white;';
-             const cancelButton = document.createElement('button');
-             cancelButton.innerText = '취소';
-             cancelButton.style.cssText = 'font-size: 0.8em; margin-left: 5px;';
-             buttonContainer.append(saveButton, cancelButton);
-             saveButton.onclick = function() {
-                 lockedRoutes.set(busRoute.busId, currentlyEditing.editedStops);
-                 lockCheckbox.checked = true;
-                 header.classList.add('locked');
-                 finalizeAllBtn.style.display = 'block';
-                 alert(`버스 #${busRoute.busId}의 수정사항이 임시 저장(고정)되었습니다.`);
-                 redrawStopList(stopUl, currentlyEditing.editedStops, false);
-                 editButton.style.display = 'inline-block';
-                 lockCheckbox.disabled = false;
-                 buttonContainer.removeChild(saveButton);
-                 buttonContainer.removeChild(cancelButton);
-                 exitEditMode();
-             };
-             cancelButton.onclick = function() {
-                 redrawStopList(stopUl, currentlyEditing.originalStops, false);
-                 editButton.style.display = 'inline-block';
-                 lockCheckbox.disabled = false;
-                 buttonContainer.removeChild(saveButton);
-                 buttonContainer.removeChild(cancelButton);
-                 exitEditMode();
-             };
-         };
+        lockContainer.append(lockCheckbox, lockLabel);
+        header.appendChild(lockContainer);
+        routeDiv.appendChild(header);
 
-         fullRoute.forEach((stop, index) => {
-             const latlng = new kakao.maps.LatLng(stop.lat, stop.lon);
-             bounds.extend(latlng);
-             const isDepot = stop.id.startsWith("DEPOT");
-             const isFirstStop = index === 0 && !isDepot;
-             const isFinalDepot = index === fullRoute.length - 1 && isDepot;
-             const isIntermediateStop = !isFirstStop && !isFinalDepot && !isDepot;
+        const stopUl = document.createElement('ul');
+        stopUl.className = 'stop-list';
+        redrawStopList(stopUl, fullRoute, false);
+        routeDiv.appendChild(stopUl);
+        infoPanel.appendChild(routeDiv);
 
-             if (isFirstStop) {
-                 const contentDiv = document.createElement('div');
-                 contentDiv.className = 'custom-marker';
-                 contentDiv.innerHTML = busRoute.busId;
-                 const overlay = new kakao.maps.CustomOverlay({ position: latlng, content: contentDiv, yAnchor: 1 });
-                 overlay.setMap(map);
-                 mapOverlays.push(overlay);
-                 contentDiv.onclick = () => {
-                     if (currentlyEditing.busId && !isDepot) {
-                         showAddStopModal(stop);
-                     } else {
-                         const infowindow = new kakao.maps.InfoWindow({
-                             content: `<div style="padding:5px;font-size:12px;"><b>${stop.name}</b><br>도착예정: ${formatMinutesToTime(stop.arrivalTime)}</div>`,
-                             removable: true
-                         });
-                         infowindow.setPosition(latlng);
-                         infowindow.open(map);
-                     }
-                 };
-             } else {
-                 let markerImage;
-                 if (isIntermediateStop) {
-                     markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/mapjsapi/images/marker.png', new kakao.maps.Size(10, 10), { offset: new kakao.maps.Point(5, 5) });
-                 } else if (isFinalDepot) {
-                      markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', new kakao.maps.Size(33, 36), { offset: new kakao.maps.Point(16, 34) });
-                 }
-                 if (markerImage) {
-                     const marker = new kakao.maps.Marker({ position: latlng, map, image: markerImage, title: stop.name });
-                     mapOverlays.push(marker);
-                     kakao.maps.event.addListener(marker, 'click', () => {
-                         if (currentlyEditing.busId && !isDepot) {
-                             showAddStopModal(stop);
-                         } else {
-                             const infowindow = new kakao.maps.InfoWindow({
-                                 content: `<div style="padding:5px;font-size:12px;"><b>${stop.name}</b><br>도착예정: ${formatMinutesToTime(stop.arrivalTime)}</div>`,
-                                 removable: true
-                             });
-                             infowindow.open(map, marker);
-                         }
-                     });
-                 }
-             }
-         });
+        // --- [복구된 로직 2] 경로 수정 버튼 이벤트 핸들러 ---
+        editButton.onclick = function(event) {
+            event.stopPropagation();
+            if (currentlyEditing.busId) { alert('다른 경로를 수정 중입니다. 먼저 완료하거나 취소해주세요.'); return; }
+            currentlyEditing = { busId: busRoute.busId, routeDiv, originalStops: [...fullRoute], editedStops: [...fullRoute] };
+            routeDiv.classList.add('editing');
+            lockCheckbox.disabled = true;
+            redrawStopList(stopUl, currentlyEditing.editedStops, true);
+            editButton.style.display = 'none';
+            const saveButton = document.createElement('button');
+            saveButton.innerText = '수정 완료';
+            saveButton.style.cssText = 'font-size: 0.8em; background-color: #28a745; color: white;';
+            const cancelButton = document.createElement('button');
+            cancelButton.innerText = '취소';
+            cancelButton.style.cssText = 'font-size: 0.8em; margin-left: 5px;';
+            buttonContainer.append(saveButton, cancelButton);
+            saveButton.onclick = function() {
+                console.log("save버튼 클릭 됨")
+                lockedRoutes.set(busRoute.busId, currentlyEditing.editedStops);
+                lockCheckbox.checked = true;
+                header.classList.add('locked');
+                finalizeAllBtn.style.display = 'block';
+                alert(`버스 #${busRoute.busId}의 수정사항이 임시 저장(고정)되었습니다.`);
+                redrawStopList(stopUl, currentlyEditing.editedStops, false);
+                editButton.style.display = 'inline-block';
+                lockCheckbox.disabled = false;
+                buttonContainer.removeChild(saveButton);
+                buttonContainer.removeChild(cancelButton);
+                exitEditMode();
+            };
+            cancelButton.onclick = function() {
+                redrawStopList(stopUl, currentlyEditing.originalStops, false);
+                editButton.style.display = 'inline-block';
+                lockCheckbox.disabled = false;
+                buttonContainer.removeChild(saveButton);
+                buttonContainer.removeChild(cancelButton);
+                exitEditMode();
+            };
+        };
+        // ----------------------------------------------------
 
-         if (busRoute.detailedPath) {
-             busRoute.detailedPath.forEach(segmentPath => {
-                 if (segmentPath && segmentPath.length > 0) {
-                     const pathCoordinates = segmentPath.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
-                     const polyline = new kakao.maps.Polyline({
-                         path: pathCoordinates,
-                         strokeWeight: 4,
-                         strokeColor: routeColor,
-                         strokeOpacity: 0.8,
-                         strokeStyle: 'solid',
-                         zIndex: routeIndex
-                     });
-                     polyline.setMap(map);
-                     mapOverlays.push(polyline);
-                     routePolylines.push(polyline);
-                 }
-             });
-         }
-     });
+        fullRoute.forEach((stop, index) => {
+            const latlng = new kakao.maps.LatLng(stop.lat, stop.lon);
+            bounds.extend(latlng);
+            const isDepot = stop.id.startsWith("DEPOT");
+            const isFirstStop = index === 0 && !isDepot;
+            const isFinalDepot = index === fullRoute.length - 1 && isDepot;
+            const isIntermediateStop = !isFirstStop && !isFinalDepot && !isDepot;
 
-     if (!bounds.isEmpty()) map.setBounds(bounds);
- }
+            if (isFirstStop) {
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'custom-marker';
+                contentDiv.innerHTML = busRoute.busId;
+                const overlay = new kakao.maps.CustomOverlay({ position: latlng, content: contentDiv, yAnchor: 1 });
+                overlay.setMap(map);
+                mapOverlays.push(overlay);
+                contentDiv.onclick = () => {
+                    if (currentlyEditing.busId && !isDepot) {
+                        showAddStopModal(stop);
+                    } else {
+                        const infowindow = new kakao.maps.InfoWindow({
+                            content: `<div style="padding:5px;font-size:12px;"><b>${stop.name}</b><br>도착예정: ${formatMinutesToTime(stop.arrivalTime)}</div>`,
+                            removable: true
+                        });
+                        infowindow.setPosition(latlng);
+                        infowindow.open(map);
+                    }
+                };
+            } else {
+                let markerImage;
+                if (isIntermediateStop) {
+                    markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/mapjsapi/images/marker.png', new kakao.maps.Size(10, 10), { offset: new kakao.maps.Point(5, 5) });
+                } else if (isFinalDepot) {
+                     markerImage = new kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', new kakao.maps.Size(33, 36), { offset: new kakao.maps.Point(16, 34) });
+                }
+                if (markerImage) {
+                    const marker = new kakao.maps.Marker({ position: latlng, map, image: markerImage, title: stop.name });
+                    mapOverlays.push(marker);
+                    kakao.maps.event.addListener(marker, 'click', () => {
+                        if (currentlyEditing.busId && !isDepot) {
+                            showAddStopModal(stop);
+                        } else {
+                            const infowindow = new kakao.maps.InfoWindow({
+                                content: `<div style="padding:5px;font-size:12px;"><b>${stop.name}</b><br>도착예정: ${formatMinutesToTime(stop.arrivalTime)}</div>`,
+                                removable: true
+                            });
+                            infowindow.open(map, marker);
+                        }
+                    });
+                }
+            }
+        });
+
+        if (busRoute.detailedPath) {
+            busRoute.detailedPath.forEach(segmentPath => {
+                if (segmentPath && segmentPath.length > 0) {
+                    const pathCoordinates = segmentPath.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
+                    const polyline = new kakao.maps.Polyline({
+                        path: pathCoordinates,
+                        strokeWeight: 4,
+                        strokeColor: routeColor,
+                        strokeOpacity: 0.8,
+                        strokeStyle: 'solid',
+                        zIndex: routeIndex
+                    });
+                    polyline.setMap(map);
+                    mapOverlays.push(polyline);
+                    routePolylines.push(polyline);
+                }
+            });
+        }
+    });
+
+    if (!bounds.isEmpty()) map.setBounds(bounds);
+}
 
 
  // --- 4. 유틸리티 및 기타 함수들 ---
