@@ -10,8 +10,6 @@ h1 { text-align: center; }
     cursor: pointer;
     background-color: #f0f0f0;
 }
-#finalize-all-btn { display: none; background-color: #007bff; color: white; }
-#finalize-all-btn:disabled { background-color: #cccccc; }
 
 #map-container { display: flex; gap: 20px; height: 85vh; }
 #map { width: 70%; height: 100%; border: 1px solid #ccc; }
