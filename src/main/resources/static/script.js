@@ -334,7 +334,6 @@ function drawRoutesAndInfo(busRoutes) {
         const headerContent = document.createElement('div');
         headerContent.className = 'header-main-content';
         headerContent.innerHTML = `<span style="background-color:${routeColor}; border: 1px solid #555;"></span>버스 #${busRoute.busId} (서비스 시간: ${busRoute.routeTime}분, 탑승인원: ${busRoute.finalLoad}명)
-                            <div class="departure-time">예상 출발(차고지): ${formatMinutesToTime(departureTime)}</div>`;
         header.appendChild(headerContent);
 
         const buttonContainer = document.createElement('div');
