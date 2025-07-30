@@ -10,6 +10,30 @@
 <h1>셔틀버스 최적 경로 결과</h1>
 
 <div id="final-controls">
+    <button id="load-stops-btn">선택한 DB 경유지 불러오기</button>
+    <hr>
+    <div class="parameter-controls">
+        <div>
+            <label for="time-limit">이동시간 제한(분):</label>
+            <input type="number" id="time-limit" value="20">
+        </div>
+        <div>
+            <label for="capacity">버스 탑승인원:</label>
+            <input type="number" id="capacity" value="45">
+        </div>
+        <div>
+            <label for="service-time">서비스 시간 제한(분):</label>
+            <input type="number" id="service-time" value="100">
+        </div>
+        <div>
+            <label for="db-select">데이터 선택:</label>
+            <select id="db-select">
+                <option value="INC4.csv">INC4.csv</option>
+                <option value="INC12.csv">INC12.csv</option>
+                <option value="BUC2.csv">BUC2.csv</option>
+                <option value="TW1.csv">TW1.csv</option>
+            </select>
+        </div>
     <button id="start-optimization-btn">최적 경로 계산 시작</button>
     <button id="finalize-all-btn">고정된 경로로 재계산 요청</button>
 
