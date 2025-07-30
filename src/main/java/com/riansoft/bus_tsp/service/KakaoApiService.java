@@ -13,7 +13,6 @@ import org.springframework.web.client.RestTemplate;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays; // Arrays.sort 사용하지 않으므로 사실상 필요 없음
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,10 +32,7 @@ public class KakaoApiService {
         new File("cache").mkdirs(); // 캐시 디렉토리 생성
     }
 
-    /**
-     * 이제 A-B, B-A 각각의 이동 시간을 계산하고 캐시합니다.
-     * 캐시 파일 로드 및 저장 전략은 기존과 동일하게 유지됩니다.
-     */
+
     public long[][] createTimeMatrixFromApi(List<VirtualStop> stops) {
         System.out.println("\n========= [2/5] 카카오 API를 통한 시간 행렬 생성 및 캐싱 시작 (비대칭) ==========");
         Map<String, Long> cachedDurations = loadDurationsFromCache();
@@ -63,11 +59,9 @@ public class KakaoApiService {
                     cachedDurations.put(canonicalKey, duration);
                     isCacheUpdated = true;
                 } else {
-                    // System.out.printf("    [CACHE HIT] '%s' -> '%s' 경로 캐시 사용 (%d분)%n", origin.name, destination.name, cachedDurations.get(canonicalKey));
                 }
 
                 processedPairs++;
-                // 진행률 로그 (매 10% 단위로 또는 적절한 간격으로 출력)
                 if (totalPairs > 0 && processedPairs % (totalPairs / 10 + 1) == 0) {
                     System.out.printf("  [API LOG] 시간 행렬 생성 진행률: %.1f%% (%d / %d 쌍 처리 완료)%n",
                             ((double)processedPairs / totalPairs * 100), processedPairs, totalPairs);
@@ -80,7 +74,6 @@ public class KakaoApiService {
         }
         System.out.println("========= [2/5] 시간 행렬 생성 및 캐싱 완료 (비대칭) ==========\n");
 
-        // 캐시된 데이터를 바탕으로 최종 이차원 행렬 구축
         return buildMatrixFromCache(stops, cachedDurations);
     }
 
@@ -186,9 +179,7 @@ public class KakaoApiService {
                     finalMatrix[i][j] = 0;
                     continue;
                 }
-                // 변경: 비대칭 키를 사용하여 캐시에서 값을 가져옵니다.
                 String key = createNonSymmetricKeyByName(stops.get(i).name, stops.get(j).name);
-                // 캐시에 없는 경우 기본값 (예: 999분)을 사용 (오류 발생 시 API에서 반환하는 값과 동일)
                 finalMatrix[i][j] = cachedDurations.getOrDefault(key, 999L);
             }
         }

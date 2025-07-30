@@ -1,12 +1,10 @@
 package com.riansoft.bus_tsp.service;
 
-import com.google.ortools.Loader;
 import com.google.ortools.constraintsolver.*;
 import com.google.protobuf.Duration;
 import com.riansoft.bus_tsp.dto.*;
 import com.riansoft.bus_tsp.model.DataModel;
 import com.riansoft.bus_tsp.model.VirtualStop;
-import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -37,17 +35,7 @@ public class RouteOptimizationService {
         this.validationService = validationService;
     }
 
-    @PostConstruct
-    public void init() {
-        try {
-            System.out.println("[LOG] Google OR-Tools 네이티브 라이브러리 로드를 시도합니다...");
-            Loader.loadNativeLibraries();
-            System.out.println("[LOG] 라이브러리 로드 성공!");
-        } catch (Exception e) {
-            System.err.println("!!! [FATAL] Google OR-Tools 라이브러리 로드 실패 !!!");
-            e.printStackTrace();
-        }
-    }
+
 
     public RouteSolutionDto findOptimalRoutes(long timeLimit, int capacity, long serviceTime, String dbName) {
         System.out.println("\n========= [1/5] 최초 최적 경로 계산 시작 ==========");

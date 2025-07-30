@@ -4,7 +4,7 @@ import com.riansoft.bus_tsp.dto.ModifiedRouteDto;
 import com.riansoft.bus_tsp.dto.StopDto;
 import com.riansoft.bus_tsp.dto.ValidatedRouteDto;
 import com.riansoft.bus_tsp.model.VirtualStop;
-import org.springframework.beans.factory.annotation.Autowired; // @Autowired를 사용한다면 추가
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
