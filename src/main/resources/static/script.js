@@ -40,6 +40,19 @@
   * 페이지의 모든 버튼에 대한 클릭 이벤트를 설정합니다.
   */
  function setupEventListeners() {
+
+     const loadStopsBtn = document.getElementById('load-stops-btn');
+     loadStopsBtn.onclick = function() {
+         fetchAllStopsAndDisplay().then(() => {
+             document.getElementById('start-optimization-btn').disabled = false;
+             document.getElementById('start-drawing-btn').disabled = false;
+             document.getElementById('clear-polygons-btn').disabled = false;
+             document.getElementById('get-drawing-data-btn').disabled = false;
+         }).catch(() => {
+             alert("경유지 로딩에 실패했습니다.");
+         });
+     };
+
      const startBtn = document.getElementById('start-optimization-btn');
      startBtn.onclick = function() {
          document.getElementById('status').innerText = '경로 계산 중...';
