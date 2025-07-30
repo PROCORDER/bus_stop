@@ -19,11 +19,8 @@ import java.util.stream.Collectors;
 @Service
 public class RouteOptimizationService {
 
-    public static final int VEHICLE_CAPACITY = 45;
     private static final int MAX_VEHICLES = 10000;
-    private static final long STOP_TO_STOP_TIME_LIMIT = 20;
     private static final long PENALTY_FOR_EXCEEDING_TIME = 100000;
-    private static final long MAX_SERVICE_TIME = 100;
     private static final long SEARCH_TIME_LIMIT_SECONDS = 30;
 
     private final StopDataService stopDataService;
