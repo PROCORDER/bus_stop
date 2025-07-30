@@ -121,8 +121,8 @@ public class RouteOptimizationService {
     /**
      * OR-Tools Solver를 실행하는 공통 로직
      */
-    private RouteSolutionDto runSolver(DataModel data) {
-        preCheckStops(data);
+    private RouteSolutionDto runSolver(DataModel data, long timeLimit, long serviceTime) {
+        preCheckStops(data,serviceTime);
 
         System.out.println("========= [SOLVER] OR-Tools 모델 생성 및 제약조건 설정 시작 ==========");
         RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.numVehicles, data.depotIndex);
@@ -134,7 +134,7 @@ public class RouteOptimizationService {
                     int toNode = manager.indexToNode(toIndex);
                     if (fromNode == data.depotIndex) return 0;
                     long travelTime = data.timeMatrix[fromNode][toNode];
-                    if (toNode != data.depotIndex && travelTime > STOP_TO_STOP_TIME_LIMIT) {
+                    if (toNode != data.depotIndex && travelTime > timeLimit) {
                         return PENALTY_FOR_EXCEEDING_TIME;
                     }
                     return travelTime;
@@ -147,7 +147,7 @@ public class RouteOptimizationService {
                     if (fromNode == data.depotIndex) return 0;
                     return data.timeMatrix[fromNode][manager.indexToNode(toIndex)];
                 });
-        routing.addDimension(serviceTimeCallbackIndex, 0, MAX_SERVICE_TIME, true, "ServiceTime");
+        routing.addDimension(serviceTimeCallbackIndex, 0, serviceTime, true, "ServiceTime");
 
         final int demandCallbackIndex = routing.registerUnaryTransitCallback(
                 (fromIndex) -> data.virtualStops.get(manager.indexToNode(fromIndex)).demand);
