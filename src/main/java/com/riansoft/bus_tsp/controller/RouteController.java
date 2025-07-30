@@ -84,9 +84,9 @@ public class RouteController {
     }
 
     @GetMapping("/all-stops")
-    public ResponseEntity<List<StopDto>> getAllStops() {
+    public ResponseEntity<List<StopDto>> getAllStops(@RequestParam String dbName) {
         System.out.printf("연결이 들어왔습니다.");
-        List<StopDto> allStops = stopDataService.getAllStopsAsDto();
+        List<StopDto> allStops = stopDataService.getAllStopsAsDto(dbName);
         return ResponseEntity.ok(allStops);
     }
 }
