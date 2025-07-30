@@ -72,9 +72,11 @@ public class RouteController {
             System.out.println("[LOG] 수신된 수정사항이 없습니다.");
         } else {
             for (ModifiedRouteDto modification : request.getModifications()) {
-                ValidatedRouteDto result = validationService.validateAndCalculate(modification);
+                // validateAndCalculate 호출 시 dbName 인수를 함께 전달합니다.
+                ValidatedRouteDto result = validationService.validateAndCalculate(modification, capacity, dbName);
+
                 System.out.printf("  [수정된 버스 ID]: %d%n", result.getBusId());
-                String newRoutePath = result.getNewRoute().stream().map(stop -> stop.getName()).collect(Collectors.joining(" -> "));
+                String newRoutePath = result.getNewRoute().stream().map(StopDto::getName).collect(Collectors.joining(" -> "));
                 System.out.printf("  [새로운 경로]: %s%n", newRoutePath);
                 System.out.printf("  [계산된 서비스 시간]: %d분%n", result.getCalculatedRouteTime());
                 System.out.printf("  [계산된 총 탑승인원]: %d명%n", result.getCalculatedFinalLoad());
