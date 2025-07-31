@@ -28,8 +28,44 @@
 
  kakao.maps.load(initializeApp);
 
+function timeStringToMinutes(timeString) {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return hours * 60 + minutes;
+}
 
  function setupEventListeners() {
+     const startDrawingBtn = document.getElementById('start-drawing-btn');
+     const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
+         if (startDrawingBtn && cancelDrawingBtn) {
+             startDrawingBtn.onclick = function() {
+                 if (drawingManager) {
+                     drawingManager.select(kakao.maps.drawing.OverlayType.POLYGON);
+                     startDrawingBtn.style.display = 'none';
+                     cancelDrawingBtn.style.display = 'inline-block';
+                 }
+             };
+
+             cancelDrawingBtn.onclick = function() {
+                 if (drawingManager) {
+                     drawingManager.cancel();
+                     startDrawingBtn.style.display = 'inline-block';
+                     cancelDrawingBtn.style.display = 'none';
+                 }
+             };
+         }
+    document.getElementById('confirm-add-btn').onclick = function() {
+         const select = document.getElementById('insert-before-select');
+         const insertBeforeId = select.value;
+         const insertIndex = currentlyEditing.editedStops.findIndex(s => s.id === insertBeforeId);
+
+         if (insertIndex !== -1 && stopToAdd) {
+             currentlyEditing.editedStops.splice(insertIndex, 0, stopToAdd);
+             redrawStopList(currentlyEditing.routeDiv.querySelector('.stop-list'), currentlyEditing.editedStops, true);
+         }
+         hideAddStopModal();
+     };
+
+     document.getElementById('cancel-add-btn').onclick = hideAddStopModal;
 
      const loadStopsBtn = document.getElementById('load-stops-btn');
      loadStopsBtn.onclick = function() {
@@ -39,38 +75,38 @@
              document.getElementById('clear-polygons-btn').disabled = false;
              document.getElementById('get-drawing-data-btn').disabled = false;
          }).catch(() => {
+
          });
      };
 
      const startBtn = document.getElementById('start-optimization-btn');
      startBtn.onclick = function() {
+         const arrivalTime = timeStringToMinutes(document.getElementById('arrival-time').value);
          const timeLimit = document.getElementById('time-limit').value;
          const capacity = document.getElementById('capacity').value;
          const serviceTime = document.getElementById('service-time').value;
          const dbName = document.getElementById('db-select').value;
          document.getElementById('status-container').innerHTML = '<h2>경로 계산 중...</h2>';
-         startBtn.disabled = true;
+
 
          const startDrawingBtn = document.getElementById('start-drawing-btn');
          const cancelDrawingBtn = document.getElementById('cancel-drawing-btn');
          const clearPolygonsBtn = document.getElementById('clear-polygons-btn');
+            const numVehicles = document.getElementById('num-vehicles').value;
          if (drawingManager) drawingManager.cancel();
-         if(startDrawingBtn) startDrawingBtn.style.display = 'none';
          if(cancelDrawingBtn) cancelDrawingBtn.style.display = 'none';
          if(clearPolygonsBtn) clearPolygonsBtn.style.display = 'none';
 
          clearMap();
 
-         fetch(`/api/optimize-route?timeLimit=${timeLimit}&capacity=${capacity}&serviceTime=${serviceTime}&dbName=${dbName}`)
+         fetch(`/api/optimize-route?timeLimit=${timeLimit}&capacity=${capacity}&serviceTime=${serviceTime}&dbName=${dbName}&numVehicles=${numVehicles}&arrivalTime=${arrivalTime}`)
              .then(response => response.json())
              .then(data => {
                  if (!data || !data.busRoutes || data.busRoutes.length === 0) {
                      document.getElementById('status-container').innerHTML = '<h2>오류: 서버에서 해답을 찾지 못했습니다.</h2>';
-                     startBtn.disabled = false;
                      fetchAllStopsAndDisplay();
                      return;
                  }
-                 startBtn.style.display = 'none';
                  const statusContainer = document.getElementById('status-container');
                  statusContainer.innerHTML = `
                      <h3>총 운행 정보</h3>
@@ -95,7 +131,6 @@
              })
              .catch(error => {
                  document.getElementById('status-container').innerHTML = '<h2>경로 계산 중 오류가 발생했습니다.</h2>';
-                 startBtn.disabled = false;
                  fetchAllStopsAndDisplay();
                  console.error('Error:', error);
              })
@@ -114,18 +149,21 @@
              }
 
              // UI에서 현재 파라미터 값들을 다시 가져옵니다.
+             const arrivalTime = timeStringToMinutes(document.getElementById('arrival-time').value);
              const timeLimit = document.getElementById('time-limit').value;
              const capacity = document.getElementById('capacity').value;
              const serviceTime = document.getElementById('service-time').value;
              const dbName = document.getElementById('db-select').value;
-
+             const numVehicles = document.getElementById('num-vehicles').value;
              const payload = {
                  modifications: Array.from(lockedRoutes.entries()).map(([busId, stops]) => ({ busId, newRoute: stops })),
                  params: {
                      timeLimit: timeLimit,
                      capacity: capacity,
                      serviceTime: serviceTime,
-                     dbName: dbName
+                     dbName: dbName,
+                     numVehicles:numVehicles,
+                     arrivalTime: arrivalTime
                  }
              };
 
@@ -149,7 +187,7 @@
                  statusContainer.innerHTML = `
                      <h3>총 운행 정보</h3>
                      <div class="status-line">
-                         <p>필요 버스: ${newSolution.usedBuses}대 | 전체 목표 비용: ${newSolution.totalObjectiveTime}</p>
+                         <p>필요 버스: ${newSolution.usedBuses}대</p>
                          <div class="master-toggle">
                              <input type="checkbox" id="toggle-all-routes" checked>
                              <label for="toggle-all-routes">모든 경로 표시</label>
