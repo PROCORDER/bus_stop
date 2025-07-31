@@ -38,9 +38,11 @@ public class RouteController {
             @RequestParam long timeLimit,
             @RequestParam int capacity,
             @RequestParam long serviceTime,
+            @RequestParam int numVehicles,
+            @RequestParam long arrivalTime,
             @RequestParam String dbName) {
         // 서비스 호출 시 파라미터 전달
-        RouteSolutionDto solution = routeService.findOptimalRoutes(timeLimit, capacity, serviceTime, dbName);
+        RouteSolutionDto solution = routeService.findOptimalRoutes(timeLimit, capacity, serviceTime, dbName,numVehicles,arrivalTime);
         if (solution == null) {
             return ResponseEntity.internalServerError().body(null);
         }
@@ -89,7 +91,7 @@ public class RouteController {
     }
 
     /**
-     * [핵심 추가] 프론트엔드에서 고정된 경로를 받아 '재계산'하고, '새로운 RouteSolutionDto를 반환'합니다.
+     * [프론트엔드에서 고정된 경로를 받아 '재계산'하고, '새로운 RouteSolutionDto를 반환'합니다.
      */
     @PostMapping("/re-optimize")
     public ResponseEntity<RouteSolutionDto> reOptimizeRoutes(@RequestBody RouteModificationRequestDto request) {
@@ -98,10 +100,12 @@ public class RouteController {
         long timeLimit = Long.parseLong(params.get("timeLimit"));
         int capacity = Integer.parseInt(params.get("capacity"));
         long serviceTime = Long.parseLong(params.get("serviceTime"));
+        int numVehicles = Integer.parseInt(params.get("numVehicles"));
+        long arrivalTime = Long.parseLong(params.get("arrivalTime"));
         String dbName = params.get("dbName");
 
         // 서비스 호출 시 파라미터 전달
-        RouteSolutionDto newSolution = routeService.reOptimizeWithConstraints(request, timeLimit, capacity, serviceTime, dbName);
+        RouteSolutionDto newSolution = routeService.reOptimizeWithConstraints(request, timeLimit, capacity, serviceTime, dbName, numVehicles, arrivalTime);
         if (newSolution == null) {
             return ResponseEntity.internalServerError().body(null);
         }
