@@ -19,9 +19,8 @@ import java.util.stream.Collectors;
 @Service
 public class RouteOptimizationService {
 
-    private static final int MAX_VEHICLES = 10000;
     private static final long PENALTY_FOR_EXCEEDING_TIME = 100000;
-    private static final long SEARCH_TIME_LIMIT_SECONDS = 30;
+    private static final long SEARCH_TIME_LIMIT_SECONDS = 100;
 
     private final StopDataService stopDataService;
     private final KakaoApiService kakaoApiService;
@@ -49,17 +48,17 @@ public class RouteOptimizationService {
         }
     }
 
-    public RouteSolutionDto findOptimalRoutes(long timeLimit, int capacity, long serviceTime, String dbName) {
+    public RouteSolutionDto findOptimalRoutes(long timeLimit, int capacity, long serviceTime, String dbName,int numvehicles,long arrivalTime) {
         System.out.println("\n========= [1/5] 최초 최적 경로 계산 시작 ==========");
         List<VirtualStop> virtualStops = stopDataService.getVirtualStops(capacity, dbName);
-        DataModel data = createDataModel(virtualStops, capacity);
-        return runSolver(data, timeLimit, serviceTime);
+        DataModel data = createDataModel(virtualStops, capacity,numvehicles);
+        return runSolver(data, timeLimit, serviceTime, arrivalTime);
     }
 
     /**
      * 고정된 제약조건으로 경로를 재계산합니다.
      */
-    public RouteSolutionDto reOptimizeWithConstraints(RouteModificationRequestDto request, long timeLimit, int capacity, long serviceTime, String dbName) {
+    public RouteSolutionDto reOptimizeWithConstraints(RouteModificationRequestDto request, long timeLimit, int capacity, long serviceTime, String dbName,int numvehicles,long arrivalTime) {
         System.out.println("\n========= [RE-OPTIMIZE] 재계산 시작 ==========");
         // 1. 데이터 준비 및 분리
         List<ModifiedRouteDto> lockedRoutesRequest = request.getModifications();
@@ -107,21 +106,21 @@ public class RouteOptimizationService {
         List<BusRouteDto> newlyOptimizedBusRoutes = new ArrayList<>();
         if (remainingStops.size() > 1) { // 차고지 외에 남은 정류장이 있을 경우
             System.out.println("[RE-OPTIMIZE] 남은 정류장 " + (remainingStops.size() -1) + "개에 대해 재최적화 실행...");
-            DataModel remainingData = createDataModel(remainingStops, capacity);
-            RouteSolutionDto newlyOptimizedSolution = runSolver(remainingData, timeLimit, serviceTime);
+            DataModel remainingData = createDataModel(remainingStops, capacity,numvehicles);
+            RouteSolutionDto newlyOptimizedSolution = runSolver(remainingData, timeLimit, serviceTime, arrivalTime);
             if (newlyOptimizedSolution != null) {
                 newlyOptimizedBusRoutes = newlyOptimizedSolution.getBusRoutes();
             }
         }
 
         // 4. 최종 포맷팅 요청 및 반환
-        return solutionFormatterService.formatMergedSolution(finalLockedBusRoutes, newlyOptimizedBusRoutes,capacity,dbName);
+        return solutionFormatterService.formatMergedSolution(finalLockedBusRoutes, newlyOptimizedBusRoutes,capacity,dbName, arrivalTime);
     }
 
     /**
      * OR-Tools Solver를 실행하는 공통 로직
      */
-    private RouteSolutionDto runSolver(DataModel data, long timeLimit, long serviceTime) {
+    private RouteSolutionDto runSolver(DataModel data, long timeLimit, long serviceTime,long arrivalTime) {
         preCheckStops(data,serviceTime);
 
         System.out.println("========= [SOLVER] OR-Tools 모델 생성 및 제약조건 설정 시작 ==========");
@@ -163,7 +162,7 @@ public class RouteOptimizationService {
 
         if (solution != null) {
             System.out.println("[SOLVER] 최적 경로 계산 성공!");
-            return solutionFormatterService.formatSolutionToDto(data, manager, routing, solution);
+            return solutionFormatterService.formatSolutionToDto(data, manager, routing, solution,arrivalTime);
         } else {
             System.err.println("!!! [SOLVER] 최적 경로 계산 실패 !!!");
             System.err.println("!!! Solver Status: " + routing.status() + " !!!");
@@ -190,13 +189,44 @@ public class RouteOptimizationService {
         System.out.println("----------------------------------------------------------------------\n");
     }
 
-    private DataModel createDataModel(List<VirtualStop> virtualStops, int capacity) {
+    private DataModel createDataModel(List<VirtualStop> virtualStops, int capacity, int numvehicles) {
+        // 1. 카카오 API를 통해 기본 시간 행렬을 가져옵니다.
         long[][] timeMatrix = kakaoApiService.createTimeMatrixFromApi(virtualStops);
-        long[] vehicleCapacities = new long[MAX_VEHICLES];
-        for (int i=0; i < MAX_VEHICLES; i++) {
+
+        // --- [추가] U턴 페널티 로직 ---
+        final double U_TURN_PENALTY_FACTOR = 3.0; // U턴 의심 구간에 이동 시간을 3배로 증가
+        final double U_TURN_THRESHOLD_METERS_PER_MINUTE = 60; // 분당 50m 미만 이동 시 U턴 의심
+
+        System.out.println("[PENALTY LOG] U턴이 의심되는 경로에 페널티를 부과합니다...");
+        for (int i = 0; i < virtualStops.size(); i++) {
+            for (int j = 0; j < virtualStops.size(); j++) {
+                if (i == j || timeMatrix[i][j] >= 999) continue; // 자기 자신 또는 이동 불가 경로는 제외
+
+                VirtualStop origin = virtualStops.get(i);
+                VirtualStop destination = virtualStops.get(j);
+
+                double haversineDistance = calculateHaversineDistance(origin.lat, origin.lon, destination.lat, destination.lon);
+                long travelTimeInMinutes = timeMatrix[i][j];
+
+                if (travelTimeInMinutes > 0) {
+                    double metersPerMinute = haversineDistance / travelTimeInMinutes;
+
+                    // 직선 거리에 비해 이동 시간이 비정상적으로 길면 (즉, 속도가 매우 느리면)
+                    if (metersPerMinute < U_TURN_THRESHOLD_METERS_PER_MINUTE) {
+                        System.out.printf("  [PENALTY APPLIED] '%s' -> '%s' (%.1f m/min) 경로 페널티 적용!%n",
+                                origin.name, destination.name, metersPerMinute);
+                        timeMatrix[i][j] = (long) (travelTimeInMinutes * U_TURN_PENALTY_FACTOR);
+                    }
+                }
+            }
+        }
+        // --- 페널티 로직 끝 ---
+
+        long[] vehicleCapacities = new long[numvehicles];
+        for (int i=0; i < numvehicles; i++) {
             vehicleCapacities[i] = capacity;
         }
-        return new DataModel(timeMatrix, virtualStops, MAX_VEHICLES, vehicleCapacities);
+        return new DataModel(timeMatrix, virtualStops, numvehicles, vehicleCapacities);
     }
 
     private VirtualStop findVirtualStop(List<VirtualStop> allStops, StopDto targetStop) {
@@ -204,5 +234,18 @@ public class RouteOptimizationService {
                 .filter(vs -> vs.originalId.equals(targetStop.getId()) && targetStop.getName().startsWith(vs.name.split("-")[0]))
                 .findFirst()
                 .orElse(null);
+    }
+    /**
+     * 두 지점의 위도, 경도를 받아 직선 거리(미터 단위)를 계산하는 함수 (Haversine 공식)
+     */
+    private double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371; // 지구의 반지름 (킬로미터)
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c * 1000; // 미터 단위로 변환
     }
 }
