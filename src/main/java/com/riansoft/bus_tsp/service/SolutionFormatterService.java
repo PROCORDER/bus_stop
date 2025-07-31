@@ -34,11 +34,11 @@ public class SolutionFormatterService {
      * OR-Tools의 계산 결과를 바탕으로, 각 정류장별 도착 시간을 역산하고,
      * 상세 경로를 조회하여 최종 DTO로 변환합니다.
      */
-    public RouteSolutionDto formatSolutionToDto(DataModel data, RoutingIndexManager manager, RoutingModel routing, Assignment solution) {
+    public RouteSolutionDto formatSolutionToDto(DataModel data, RoutingIndexManager manager, RoutingModel routing, Assignment solution,long arrivalTime) {
         List<BusRouteDto> busRoutes = new ArrayList<>();
         int usedVehiclesCount = 0;
 
-        final long finalArrivalTimeTarget = 9 * 60;
+        final long finalArrivalTimeTarget =arrivalTime;
         RoutingDimension capacityDimension = routing.getDimensionOrDie("Capacity");
 
         int totalUsedVehicles = 0;
@@ -105,19 +105,19 @@ public class SolutionFormatterService {
             busRoutes.add(new BusRouteDto(usedVehiclesCount, routePathForDto, totalRouteTime, finalLoad, routeColor, detailedPathSegments));
         }
 
-        return new RouteSolutionDto(solution.objectiveValue(), usedVehiclesCount, busRoutes);
+        return new RouteSolutionDto( usedVehiclesCount, busRoutes);
     }
 
     /**
      * 고정 경로와 신규 경로를 병합하고, 최종 포맷팅하여 반환합니다.
      */
-    public RouteSolutionDto formatMergedSolution(List<BusRouteDto> lockedRoutes, List<BusRouteDto> newlyOptimizedRoutes, int capacity, String dbName) {
+    public RouteSolutionDto formatMergedSolution(List<BusRouteDto> lockedRoutes, List<BusRouteDto> newlyOptimizedRoutes, int capacity, String dbName,long arrivalTime) {
         List<BusRouteDto> finalBusRoutes = new ArrayList<>();
         finalBusRoutes.addAll(lockedRoutes);
         finalBusRoutes.addAll(newlyOptimizedRoutes);
 
         List<String> colors = generateDistinctColors(finalBusRoutes.size());
-        final long finalArrivalTimeTarget = 9 * 60;
+        final long finalArrivalTimeTarget = arrivalTime;
 
         List<VirtualStop> allStops = stopDataService.getVirtualStops(capacity,dbName);
 
@@ -143,7 +143,7 @@ public class SolutionFormatterService {
                 VirtualStop origin = findVirtualStop(allStops, currentStop);
                 VirtualStop destination = findVirtualStop(allStops, nextStop);
                 if (origin != null && destination != null) {
-                    accumulatedTime += kakaoApiService.getDurationInMinutes(origin, destination);
+                    accumulatedTime += kakaoApiService.getDurationFromCache(origin, destination);
                 }
             }
 
@@ -152,10 +152,10 @@ public class SolutionFormatterService {
             lastStop.setArrivalTime(finalArrivalTimeTarget);
         }
 
-        long totalObjectiveTime = finalBusRoutes.stream().mapToLong(BusRouteDto::getRouteTime).sum();
+
         int usedBuses = finalBusRoutes.size();
 
-        return new RouteSolutionDto(totalObjectiveTime, usedBuses, finalBusRoutes);
+        return new RouteSolutionDto( usedBuses, finalBusRoutes);
     }
 
     private List<String> generateDistinctColors(int count) {
