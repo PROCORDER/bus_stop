@@ -25,6 +25,7 @@ public class KakaoApiService {
     @Value("${kakao.api.key}")
     private String KAKAO_API_KEY;
     private final File CACHE_FILE = new File("cache/timeMatrix_name_cache.json");
+    private Map<String, Long> durationCache = new HashMap<>();
 
     public KakaoApiService(RestTemplateBuilder builder) {
         this.restTemplate = builder.build();
@@ -35,7 +36,7 @@ public class KakaoApiService {
 
     public long[][] createTimeMatrixFromApi(List<VirtualStop> stops) {
         System.out.println("\n========= [2/5] 카카오 API를 통한 시간 행렬 생성 및 캐싱 시작 (비대칭) ==========");
-        Map<String, Long> cachedDurations = loadDurationsFromCache();
+        this.durationCache = loadDurationsFromCache();
         boolean isCacheUpdated = false;
 
         int totalPairs = stops.size() * (stops.size() -1); // N * (N-1)
@@ -44,7 +45,6 @@ public class KakaoApiService {
         for (int i = 0; i < stops.size(); i++) {
             for (int j = 0; j < stops.size(); j++) {
                 if (i == j) {
-                    // 같은 정류장 간 이동 시간은 0, API 호출 불필요
                     continue;
                 }
 
@@ -53,10 +53,10 @@ public class KakaoApiService {
                 // 변경: 이제 이름을 정렬하지 않고 직접 키를 생성하여 A->B와 B->A를 구분합니다.
                 String canonicalKey = createNonSymmetricKeyByName(origin.name, destination.name);
 
-                if (!cachedDurations.containsKey(canonicalKey)) {
+                if (! this.durationCache.containsKey(canonicalKey)) {
                     System.out.printf("    [API CALL] 캐시 없음: '%s' -> '%s' 경로의 이동 시간 API 호출...%n", origin.name, destination.name);
                     long duration = getDurationInMinutes(origin, destination);
-                    cachedDurations.put(canonicalKey, duration);
+                    this.durationCache.put(canonicalKey, duration);
                     isCacheUpdated = true;
                 } else {
                 }
@@ -70,11 +70,18 @@ public class KakaoApiService {
         }
 
         if (isCacheUpdated) {
-            saveDurationsToCache(cachedDurations); // 변경된 내용 파일에 저장
+            saveDurationsToCache( this.durationCache); // 변경된 내용 파일에 저장
         }
         System.out.println("========= [2/5] 시간 행렬 생성 및 캐싱 완료 (비대칭) ==========\n");
 
-        return buildMatrixFromCache(stops, cachedDurations);
+        return buildMatrixFromCache(stops,  this.durationCache);
+    }
+
+    //  캐시에서 직접 이동 시간을 가져오는 메서드
+    public long getDurationFromCache(VirtualStop origin, VirtualStop destination) {
+        String key = createNonSymmetricKeyByName(origin.name, destination.name);
+        // durationCache에 키가 있으면 해당 값을, 없으면 999L (오류/기본값) 반환
+        return this.durationCache.getOrDefault(key, 999L);
     }
 
     /**
